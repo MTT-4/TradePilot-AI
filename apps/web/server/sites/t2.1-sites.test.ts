@@ -11,11 +11,17 @@ import {
 import {
   applySiteChatUpdate,
   createSiteGenerationRequest,
+  getPublicSiteLocalePageData,
   getSiteProjectDetail,
 } from "@/server/sites/service";
 
 const originalFetch = globalThis.fetch;
 const capturedPrompts: string[] = [];
+const capturedTranslateRequests: Array<{
+  source?: string;
+  target?: string;
+  text: string;
+}> = [];
 
 function buildMockEmbedding(text: string) {
   const vector = Array.from({ length: 1024 }, () => 0);
@@ -57,7 +63,7 @@ function extractPromptContent(body: unknown) {
 }
 
 function extractLocales(prompt: string) {
-  const match = prompt.match(/Locales:\s*([^\n]+)/i);
+  const match = prompt.match(/Source locale:\s*([^\n]+)/i);
 
   if (!match) {
     return ["en"];
@@ -165,6 +171,7 @@ function installMockSiteFetch() {
   const env = getEnv();
   const embeddingsUrl = `${env.LOCAL_BGE_BASE_URL.replace(/\/$/, "")}/embeddings`;
   const chatUrl = `${env.OPENAI_BASE_URL.replace(/\/$/, "")}/chat/completions`;
+  const translateUrl = env.GOOGLE_TRANSLATE_BASE_URL;
 
   globalThis.fetch = (async (input, init) => {
     const url =
@@ -264,6 +271,42 @@ function installMockSiteFetch() {
           usage: {
             prompt_tokens: 128,
             completion_tokens: 256,
+          },
+        }),
+        {
+          status: 200,
+          headers: {
+            "content-type": "application/json",
+          },
+        },
+      );
+    }
+
+    if (url.startsWith(translateUrl)) {
+      const rawBody =
+        typeof init?.body === "string"
+          ? init.body
+          : init?.body instanceof Uint8Array
+            ? Buffer.from(init.body).toString("utf8")
+            : "";
+      const payload = rawBody ? JSON.parse(rawBody) : {};
+      const source = typeof payload.source === "string" ? payload.source : undefined;
+      const target = typeof payload.target === "string" ? payload.target : undefined;
+      const text = typeof payload.q === "string" ? payload.q : "";
+      capturedTranslateRequests.push({
+        source,
+        target,
+        text,
+      });
+
+      return new Response(
+        JSON.stringify({
+          data: {
+            translations: [
+              {
+                translatedText: `[${target}] ${text}`,
+              },
+            ],
           },
         }),
         {
@@ -437,6 +480,7 @@ describe("T2.1 site generation", () => {
       expect(detail.locales.map((item) => item.locale)).toEqual(["en", "ar", "ru"]);
       expect(detail.locales.find((item) => item.locale === "ar")?.direction).toBe("rtl");
       expect(detail.locales.every((item) => item.urlPath.endsWith(`/${item.locale}`))).toBe(true);
+      expect(detail.locales.every((item) => item.urlPath.startsWith("/site/"))).toBe(true);
       expect(detail.version?.citations.length).toBeGreaterThan(0);
       expect(
         detail.version?.citations.some((item) => item.sourceCitation.includes(publicTitle)),
@@ -446,6 +490,40 @@ describe("T2.1 site generation", () => {
       ).toBe(false);
       expect(capturedPrompts.some((prompt) => prompt.includes(publicTitle))).toBe(true);
       expect(capturedPrompts.some((prompt) => prompt.includes(internalTitle))).toBe(false);
+      expect(capturedTranslateRequests.some((item) => item.target === "ar")).toBe(true);
+      expect(capturedTranslateRequests.some((item) => item.target === "ru")).toBe(true);
+      expect(
+        (
+          detail.locales.find((item) => item.locale === "ar")?.translatedContent as {
+            headline: string;
+          }
+        ).headline.startsWith("[ar]"),
+      ).toBe(true);
+      expect(
+        (
+          detail.locales.find((item) => item.locale === "ru")?.translatedContent as {
+            headline: string;
+          }
+        ).headline.startsWith("[ru]"),
+      ).toBe(true);
+      expect(detail.version?.hreflangs).toHaveLength(3);
+      expect(detail.version?.previewChecks.map((item) => item.key)).toEqual([
+        "seo",
+        "geo",
+        "mobile",
+        "form",
+        "share",
+      ]);
+
+      const publicPage = await getPublicSiteLocalePageData({
+        slug: detail.project.slug,
+        locale: "ar",
+      });
+      expect(publicPage.locale.direction).toBe("rtl");
+      expect(publicPage.locale.quickAnswer.length).toBeGreaterThan(0);
+      expect(publicPage.absoluteUrl.endsWith(`/site/${detail.project.slug}/ar`)).toBe(true);
+      expect(publicPage.version?.robots.allowAiBots).toBe(true);
+      expect(JSON.stringify(publicPage.jsonLd)).toContain("FAQPage");
     },
     20000,
   );

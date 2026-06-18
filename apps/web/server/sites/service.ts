@@ -99,16 +99,47 @@ const snapshotSchema = z.object({
     ogVk: z.boolean(),
     trackingLinks: z.boolean(),
   }),
+  hreflangs: z
+    .array(
+      z.object({
+        locale: apiLocaleSchema,
+        href: z.string().trim().min(1).max(240),
+      }),
+    )
+    .max(6)
+    .default([]),
+  robots: z
+    .object({
+      allowAiBots: z.boolean(),
+      rules: z.array(z.string().trim().min(1).max(120)).max(12).default([]),
+    })
+    .default({
+      allowAiBots: true,
+      rules: ["index,follow", "max-image-preview:large"],
+    }),
+  ogMeta: z
+    .object({
+      title: z.string().trim().min(1).max(120),
+      description: z.string().trim().min(1).max(240),
+      imageAlt: z.string().trim().min(1).max(160),
+    })
+    .default({
+      title: "TradePilot site preview",
+      description: "Public marketing site preview.",
+      imageAlt: "TradePilot site preview card",
+    }),
   conversation: z.array(snapshotConversationMessageSchema).max(40).default([]),
 });
 
 type ApiLocale = z.infer<typeof apiLocaleSchema>;
 export type SiteBriefInput = z.infer<typeof siteBriefSchema>;
+export type SiteApiLocale = ApiLocale;
 type PreviewCheck = z.infer<typeof previewCheckSchema>;
 type ModelLocaleDraft = z.infer<typeof modelLocaleDraftSchema>;
 type ModelDraft = z.infer<typeof modelDraftSchema>;
 type SnapshotConversationMessage = z.infer<typeof snapshotConversationMessageSchema>;
 type SiteSnapshot = z.infer<typeof snapshotSchema>;
+type SiteHreflang = SiteSnapshot["hreflangs"][number];
 
 type SearchItem = {
   id: string;
@@ -151,7 +182,7 @@ function normalizeSlugPart(value: string) {
     .replace(/-{2,}/g, "-");
 }
 
-async function createUniqueSiteSlug(baseText: string, tenantId: string) {
+async function createUniqueSiteSlug(baseText: string) {
   const prisma = getPrismaClient();
   const baseSlug = normalizeSlugPart(baseText) || "site";
 
@@ -159,7 +190,6 @@ async function createUniqueSiteSlug(baseText: string, tenantId: string) {
     const candidate = index === 0 ? baseSlug : `${baseSlug}-${index + 1}`;
     const existing = await prisma.siteProject.findFirst({
       where: {
-        tenantId,
         slug: candidate,
       },
       select: {
@@ -173,6 +203,63 @@ async function createUniqueSiteSlug(baseText: string, tenantId: string) {
   }
 
   throw new ApiError(409, "CONFLICT", "Unable to allocate a unique site slug.");
+}
+
+function getSourceLocale(brief: SiteBriefInput) {
+  return brief.locales[0] ?? "en";
+}
+
+function buildGlossaryTerms(brief: SiteBriefInput) {
+  return Array.from(
+    new Set(
+      [brief.product, "TradePilot"]
+        .map((term) => term.trim())
+        .filter(Boolean),
+    ),
+  );
+}
+
+function protectGlossaryTerms(text: string, glossaryTerms: string[]) {
+  let protectedText = text;
+  const replacements: Array<{ placeholder: string; term: string }> = [];
+
+  for (const [index, term] of glossaryTerms.entries()) {
+    const placeholder = `TPGLOSSARYTOKEN${index}KEEP`;
+    const escaped = term.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    const pattern = new RegExp(escaped, "g");
+
+    if (pattern.test(protectedText)) {
+      protectedText = protectedText.replace(pattern, placeholder);
+      replacements.push({
+        placeholder,
+        term,
+      });
+    }
+  }
+
+  return {
+    protectedText,
+    replacements,
+  };
+}
+
+function restoreGlossaryTerms(
+  text: string,
+  replacements: Array<{ placeholder: string; term: string }>,
+) {
+  return replacements.reduce((current, item) => {
+    const pattern = new RegExp(item.placeholder, "g");
+    return current.replace(pattern, item.term);
+  }, text);
+}
+
+function decodeHtmlEntities(text: string) {
+  return text
+    .replace(/&amp;/g, "&")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&quot;/g, "\"")
+    .replace(/&#39;/g, "'");
 }
 
 function buildRetrievalQuery(brief: SiteBriefInput, extraPrompt?: string) {
@@ -315,39 +402,117 @@ function sanitizeModelLocaleDraft(
   } satisfies ModelLocaleDraft;
 }
 
-function buildDefaultPreviewChecks(): PreviewCheck[] {
+function deriveQuickAnswer(localeDraft: ModelLocaleDraft) {
+  const faqAnswer = localeDraft.faq[0]?.answer?.trim();
+
+  if (faqAnswer) {
+    return faqAnswer.slice(0, 220);
+  }
+
+  return localeDraft.subheadline.trim().slice(0, 220);
+}
+
+function buildDefaultPreviewChecks(params?: {
+  draft?: ModelDraft;
+}): PreviewCheck[] {
+  const localeDraft = params?.draft?.locales[0];
+  const hasSeo =
+    params?.draft?.locales.every(
+      (locale) => Boolean(locale.seoTitle.trim()) && Boolean(locale.seoDescription.trim()),
+    ) ?? true;
+  const hasGeo = Boolean(localeDraft && deriveQuickAnswer(localeDraft) && params?.draft?.citations.length);
+  const hasResponsive = Boolean(
+    localeDraft &&
+      localeDraft.sections.length <= 6 &&
+      localeDraft.headline.length <= 140,
+  );
+  const hasForm = Boolean(localeDraft?.ctaLabel.trim());
+  const hasShare = Boolean(localeDraft?.seoTitle.trim() && localeDraft?.seoDescription.trim());
+
   return [
     {
       key: "seo",
       label: "SEO",
-      status: "pass",
-      detail: "TDK 与结构化标题已生成。",
+      status: hasSeo ? "pass" : "warn",
+      detail: hasSeo ? "TDK 与结构化标题已生成。" : "仍有 locale 缺少 TDK。",
     },
     {
       key: "geo",
       label: "GEO",
-      status: "pass",
-      detail: "公开知识溯源已保留，适合 AI 摘要引用。",
+      status: hasGeo ? "pass" : "warn",
+      detail: hasGeo
+        ? "公开知识溯源与顶部快答已保留，适合 AI 摘要引用。"
+        : "建议补足快答块或溯源信息。",
     },
     {
       key: "mobile",
       label: "移动端",
-      status: "pass",
-      detail: "首屏、卖点和 CTA 保持窄屏可读。",
+      status: hasResponsive ? "pass" : "warn",
+      detail: hasResponsive ? "首屏、卖点和 CTA 保持窄屏可读。" : "文案区块偏多，建议压缩首屏长度。",
     },
     {
       key: "form",
       label: "询盘表单",
-      status: "pass",
-      detail: "CTA 已收敛到单一询盘动作。",
+      status: hasForm ? "pass" : "warn",
+      detail: hasForm ? "CTA 已收敛到单一询盘动作。" : "CTA 缺失，无法通过询盘表单检查。",
     },
     {
       key: "share",
       label: "OG/VK 分享卡",
-      status: "pass",
-      detail: "分享卡标题和摘要已准备。",
+      status: hasShare ? "pass" : "warn",
+      detail: hasShare ? "分享卡标题和摘要已准备。" : "OG/VK 分享卡信息不完整。",
     },
   ];
+}
+
+function buildHreflangs(slug: string, locales: ModelLocaleDraft[]) {
+  return locales.map((localeDraft) => ({
+    locale: localeDraft.locale,
+    href: `/site/${slug}/${localeDraft.locale}`,
+  })) satisfies SiteHreflang[];
+}
+
+function buildOgMeta(params: {
+  brief: SiteBriefInput;
+  locales: ModelLocaleDraft[];
+}) {
+  const source = params.locales[0];
+
+  return {
+    title: source?.seoTitle ?? `${params.brief.product} | TradePilot`,
+    description:
+      source?.seoDescription ??
+      `${params.brief.product} landing page for ${params.brief.market}.`,
+    imageAlt: `${params.brief.product} marketing preview`,
+  };
+}
+
+function buildRobotsRules() {
+  return {
+    allowAiBots: true,
+    rules: [
+      "index,follow",
+      "max-image-preview:large",
+      "max-snippet:-1",
+      "max-video-preview:-1",
+    ],
+  };
+}
+
+function buildSnapshotBadges(draft: ModelDraft) {
+  const checks = buildDefaultPreviewChecks({
+    draft,
+  });
+  const hasPass = (key: string) =>
+    checks.find((item) => item.key === key)?.status === "pass";
+
+  return {
+    seo: hasPass("seo"),
+    geo: hasPass("geo"),
+    responsive: hasPass("mobile"),
+    ogVk: hasPass("share"),
+    trackingLinks: true,
+  };
 }
 
 function buildFallbackDraft(params: {
@@ -437,6 +602,146 @@ function buildFallbackDraft(params: {
   } satisfies ModelDraft;
 }
 
+async function callGoogleTranslateText(params: {
+  text: string;
+  sourceLocale: ApiLocale;
+  targetLocale: ApiLocale;
+  glossaryTerms: string[];
+  fetchImpl?: typeof fetch;
+}) {
+  if (params.sourceLocale === params.targetLocale) {
+    return params.text;
+  }
+
+  const env = getEnv();
+  const fetchImpl = params.fetchImpl ?? fetch;
+  const { protectedText, replacements } = protectGlossaryTerms(
+    params.text,
+    params.glossaryTerms,
+  );
+  const response = await fetchImpl(
+    `${env.GOOGLE_TRANSLATE_BASE_URL}?key=${encodeURIComponent(env.GOOGLE_TRANSLATE_KEY)}`,
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        q: protectedText,
+        target: params.targetLocale,
+        source: params.sourceLocale,
+        format: "text",
+      }),
+    },
+  );
+
+  if (!response.ok) {
+    throw new ApiError(500, "INTERNAL", "Google Translate request failed.");
+  }
+
+  const payload = (await response.json()) as {
+    data?: {
+      translations?: Array<{
+        translatedText?: string;
+      }>;
+    };
+  };
+  const translatedText = payload.data?.translations?.[0]?.translatedText;
+
+  if (typeof translatedText !== "string") {
+    throw new ApiError(500, "INTERNAL", "Google Translate response was empty.");
+  }
+
+  return restoreGlossaryTerms(
+    decodeHtmlEntities(translatedText),
+    replacements,
+  );
+}
+
+async function translateLocaleDraft(params: {
+  sourceLocaleDraft: ModelLocaleDraft;
+  sourceLocale: ApiLocale;
+  targetLocale: ApiLocale;
+  brief: SiteBriefInput;
+  fetchImpl?: typeof fetch;
+}) {
+  if (params.sourceLocale === params.targetLocale) {
+    return {
+      ...params.sourceLocaleDraft,
+      locale: params.targetLocale,
+      ctaLabel: params.brief.cta,
+    } satisfies ModelLocaleDraft;
+  }
+
+  const glossaryTerms = buildGlossaryTerms(params.brief);
+  const translate = (text: string) =>
+    callGoogleTranslateText({
+      text,
+      sourceLocale: params.sourceLocale,
+      targetLocale: params.targetLocale,
+      glossaryTerms,
+      fetchImpl: params.fetchImpl,
+    });
+
+  return {
+    locale: params.targetLocale,
+    title: await translate(params.sourceLocaleDraft.title),
+    headline: await translate(params.sourceLocaleDraft.headline),
+    subheadline: await translate(params.sourceLocaleDraft.subheadline),
+    ctaLabel: await translate(params.brief.cta),
+    sections: await Promise.all(
+      params.sourceLocaleDraft.sections.map(async (section) => ({
+        id: section.id,
+        heading: await translate(section.heading),
+        body: await translate(section.body),
+        bullets: await Promise.all(section.bullets.map((bullet) => translate(bullet))),
+        sourceCitations: section.sourceCitations,
+      })),
+    ),
+    faq: await Promise.all(
+      params.sourceLocaleDraft.faq.map(async (item) => ({
+        question: await translate(item.question),
+        answer: await translate(item.answer),
+        sourceCitations: item.sourceCitations,
+      })),
+    ),
+    seoTitle: await translate(params.sourceLocaleDraft.seoTitle),
+    seoDescription: await translate(params.sourceLocaleDraft.seoDescription),
+  } satisfies ModelLocaleDraft;
+}
+
+async function localizeDraft(params: {
+  brief: SiteBriefInput;
+  sourceDraft: ModelDraft;
+  fetchImpl?: typeof fetch;
+}) {
+  const sourceLocale = getSourceLocale(params.brief);
+  const sourceLocaleDraft =
+    params.sourceDraft.locales.find((item) => item.locale === sourceLocale) ??
+    params.sourceDraft.locales[0];
+
+  if (!sourceLocaleDraft) {
+    throw new ApiError(500, "INTERNAL", "Missing source locale draft.");
+  }
+
+  const localizedLocales = await Promise.all(
+    params.brief.locales.map((locale) =>
+      translateLocaleDraft({
+        sourceLocaleDraft,
+        sourceLocale,
+        targetLocale: locale,
+        brief: params.brief,
+        fetchImpl: params.fetchImpl,
+      }),
+    ),
+  );
+
+  return {
+    ...params.sourceDraft,
+    locales: localizedLocales,
+  } satisfies ModelDraft;
+}
+
 function parseModelDraft(params: {
   text: string;
   brief: SiteBriefInput;
@@ -518,18 +823,42 @@ function buildSnapshot(params: {
     assistantReply: params.draft.assistantReply,
     pages: params.draft.pages,
     locales: params.draft.locales,
-    previewChecks: params.draft.previewChecks.length > 0
-      ? params.draft.previewChecks
-      : buildDefaultPreviewChecks(),
+    previewChecks:
+      params.draft.previewChecks.length > 0
+        ? params.draft.previewChecks
+        : buildDefaultPreviewChecks({
+            draft: params.draft,
+          }),
     citations: params.draft.citations,
-    badges: {
-      seo: true,
-      geo: true,
-      responsive: true,
-      ogVk: true,
-      trackingLinks: true,
-    },
+    badges: buildSnapshotBadges(params.draft),
+    hreflangs: [],
+    robots: buildRobotsRules(),
+    ogMeta: buildOgMeta({
+      brief: params.brief,
+      locales: params.draft.locales,
+    }),
     conversation,
+  } satisfies SiteSnapshot;
+}
+
+function finalizeSnapshot(params: {
+  brief: SiteBriefInput;
+  draft: ModelDraft;
+  slug: string;
+  snapshot: SiteSnapshot;
+}) {
+  return {
+    ...params.snapshot,
+    previewChecks: buildDefaultPreviewChecks({
+      draft: params.draft,
+    }),
+    badges: buildSnapshotBadges(params.draft),
+    hreflangs: buildHreflangs(params.slug, params.draft.locales),
+    robots: buildRobotsRules(),
+    ogMeta: buildOgMeta({
+      brief: params.brief,
+      locales: params.draft.locales,
+    }),
   } satisfies SiteSnapshot;
 }
 
@@ -578,6 +907,12 @@ async function persistSiteDraft(params: {
     const defaultLocaleContent =
       params.draft.locales.find((item) => item.locale === defaultLocale) ??
       params.draft.locales[0];
+    const finalSnapshot = finalizeSnapshot({
+      brief: params.brief,
+      draft: params.draft,
+      slug: siteProject.slug,
+      snapshot: params.snapshot,
+    });
 
     await tx.siteProject.update({
       where: {
@@ -633,7 +968,7 @@ async function persistSiteDraft(params: {
           siteProjectId: params.siteProjectId,
           locale: toPrismaLocale(localeDraft.locale),
           direction: getDirectionForLocale(localeDraft.locale),
-          urlPath: `/sites/${siteProject.slug}/${localeDraft.locale}`,
+          urlPath: `/site/${siteProject.slug}/${localeDraft.locale}`,
           translatedContent: localeDraft,
           seoTitle: localeDraft.seoTitle,
           seoDescription: localeDraft.seoDescription,
@@ -642,6 +977,7 @@ async function persistSiteDraft(params: {
             product: params.brief.product,
             locale: localeDraft.locale,
             source: "public_kb_only",
+            quickAnswer: deriveQuickAnswer(localeDraft),
           },
           publishStatus: PublishStatus.PENDING,
         },
@@ -654,7 +990,7 @@ async function persistSiteDraft(params: {
         siteProjectId: params.siteProjectId,
         createdByUserId: params.createdByUserId,
         versionNumber: (lastVersion?.versionNumber ?? 0) + 1,
-        snapshot: params.snapshot,
+        snapshot: finalSnapshot,
         note: params.note,
       },
       select: {
@@ -683,7 +1019,7 @@ async function persistSiteDraft(params: {
           versionId: version.id,
           versionNumber: version.versionNumber,
           locales: params.brief.locales,
-          citations: params.snapshot.citations.map((item) => item.sourceCitation),
+          citations: finalSnapshot.citations.map((item) => item.sourceCitation),
         },
       },
     });
@@ -693,19 +1029,23 @@ async function persistSiteDraft(params: {
 }
 
 function buildGenerationPrompt(brief: SiteBriefInput) {
+  const sourceLocale = getSourceLocale(brief);
+
   return sanitizePublicPromptText(
     [
     "Create a B2B export landing site draft in JSON only.",
     `Market: ${brief.market}`,
     `Product: ${brief.product}`,
-    `Locales: ${brief.locales.join(", ")}`,
+    `Source locale: ${sourceLocale}`,
+    `Requested locales: ${brief.locales.join(", ")}`,
     `Style: ${brief.style}`,
     `CTA intent: ${brief.cta}`,
     "Requirements:",
     "- Use only attached public knowledge context.",
     "- Keep the copy suitable for public marketing pages.",
     "- Produce 1 to 3 pages, but default to 1 landing page.",
-    "- For each locale include title, headline, subheadline, CTA, sections, FAQ, seoTitle, seoDescription.",
+    "- Generate only the source locale content. Other locales will be translated later.",
+    "- Include title, headline, subheadline, CTA, sections, FAQ, seoTitle, seoDescription for the source locale.",
     "- Keep citations only as exact sourceCitation strings from knowledge context.",
     "- Return JSON with keys: projectName, assistantReply, pages, locales, previewChecks, citations.",
     ].join("\n"),
@@ -717,12 +1057,15 @@ function buildChatPrompt(params: {
   message: string;
   snapshot: SiteSnapshot;
 }) {
+  const sourceLocale = getSourceLocale(params.brief);
+
   return sanitizePublicPromptText(
     [
     "Revise the existing B2B site draft and return JSON only.",
     `Market: ${params.brief.market}`,
     `Product: ${params.brief.product}`,
-    `Locales: ${params.brief.locales.join(", ")}`,
+    `Source locale: ${sourceLocale}`,
+    `Requested locales: ${params.brief.locales.join(", ")}`,
     `Style: ${params.brief.style}`,
     `CTA intent: ${params.brief.cta}`,
     "Current site snapshot JSON:",
@@ -737,6 +1080,7 @@ function buildChatPrompt(params: {
     "Rules:",
     "- Preserve grounded facts and cite only attached public knowledge context.",
     "- If the request asks for unsupported facts, keep the wording generic instead of inventing specifics.",
+    "- Return only the source locale draft. Other locales will be translated after the update.",
     "- Return the same JSON shape: projectName, assistantReply, pages, locales, previewChecks, citations.",
     ].join("\n"),
   );
@@ -808,10 +1152,7 @@ export async function createSiteGenerationRequest(params: {
 }) {
   const brief = siteBriefSchema.parse(params.brief);
   const prisma = getPrismaClient();
-  const slug = await createUniqueSiteSlug(
-    `${brief.product}-${brief.market}`,
-    params.tenantContext.tenantId,
-  );
+  const slug = await createUniqueSiteSlug(`${brief.product}-${brief.market}`);
   const siteProject = await prisma.siteProject.create({
     data: {
       tenantId: params.tenantContext.tenantId,
@@ -871,12 +1212,17 @@ export async function runGenerateSiteJob(params: {
     prompt: buildGenerationPrompt(params.brief),
     fetchImpl: params.fetchImpl,
   });
-  const draft = parseModelDraft({
+  const sourceDraft = parseModelDraft({
     text: modelResult.text,
     brief: params.brief,
-    requestedLocales: params.brief.locales,
+    requestedLocales: [getSourceLocale(params.brief)],
     knowledgeItems,
     assistantReplyFallback: "已基于公开知识生成站点草稿，可继续对话修改。",
+  });
+  const draft = await localizeDraft({
+    brief: params.brief,
+    sourceDraft,
+    fetchImpl: params.fetchImpl,
   });
   const now = new Date().toISOString();
   const snapshot = buildSnapshot({
@@ -1015,6 +1361,7 @@ function toDetailResponse(params: {
     locales: params.locales.map((locale) => ({
       id: locale.id,
       locale: toApiLocale(locale.locale),
+      hreflang: toApiLocale(locale.locale),
       direction: locale.direction.toLowerCase(),
       urlPath: locale.urlPath,
       translatedContent: locale.translatedContent,
@@ -1035,6 +1382,9 @@ function toDetailResponse(params: {
           previewChecks: snapshot.previewChecks,
           badges: snapshot.badges,
           citations: snapshot.citations,
+          hreflangs: snapshot.hreflangs,
+          robots: snapshot.robots,
+          ogMeta: snapshot.ogMeta,
           conversation: snapshot.conversation,
           createdAt: params.currentVersion.createdAt.toISOString(),
           updatedAt: params.currentVersion.updatedAt.toISOString(),
@@ -1122,6 +1472,175 @@ export async function getSiteProjectDetail(
   });
 }
 
+function buildSiteJsonLd(params: {
+  appUrl: string;
+  project: {
+    name: string;
+    product: string | null;
+    market: string | null;
+  };
+  locale: {
+    locale: ApiLocale;
+    urlPath: string;
+    translatedContent: ModelLocaleDraft;
+  };
+}) {
+  const pageUrl = `${params.appUrl.replace(/\/$/, "")}${params.locale.urlPath}`;
+  const faqEntities = params.locale.translatedContent.faq.map((item) => ({
+    "@type": "Question",
+    name: item.question,
+    acceptedAnswer: {
+      "@type": "Answer",
+      text: item.answer,
+    },
+  }));
+
+  return {
+    "@context": "https://schema.org",
+    "@graph": [
+      {
+        "@type": "WebPage",
+        name: params.locale.translatedContent.title,
+        url: pageUrl,
+        inLanguage: params.locale.locale,
+        description: params.locale.translatedContent.seoDescription,
+      },
+      {
+        "@type": "Service",
+        name: params.project.product ?? params.project.name,
+        areaServed: params.project.market ?? undefined,
+        description: params.locale.translatedContent.subheadline,
+        url: pageUrl,
+      },
+      ...(faqEntities.length > 0
+        ? [
+            {
+              "@type": "FAQPage",
+              mainEntity: faqEntities,
+            },
+          ]
+        : []),
+    ],
+  };
+}
+
+export async function getPublicSiteLocalePageData(params: {
+  slug: string;
+  locale: ApiLocale;
+}) {
+  const prisma = getPrismaClient();
+  const siteProject = await prisma.siteProject.findFirst({
+    where: {
+      slug: params.slug,
+    },
+    select: {
+      id: true,
+      name: true,
+      slug: true,
+      market: true,
+      product: true,
+      style: true,
+      cta: true,
+      defaultLocale: true,
+      status: true,
+      createdAt: true,
+      updatedAt: true,
+      publishedAt: true,
+      currentVersion: {
+        select: {
+          id: true,
+          versionNumber: true,
+          note: true,
+          snapshot: true,
+          createdAt: true,
+          updatedAt: true,
+        },
+      },
+      pages: {
+        orderBy: {
+          createdAt: "asc",
+        },
+        select: {
+          id: true,
+          pageType: true,
+          title: true,
+          slug: true,
+          isHomepage: true,
+          content: true,
+        },
+      },
+      locales: {
+        orderBy: {
+          createdAt: "asc",
+        },
+        select: {
+          id: true,
+          locale: true,
+          direction: true,
+          urlPath: true,
+          translatedContent: true,
+          seoTitle: true,
+          seoDescription: true,
+          geoMetadata: true,
+          publishStatus: true,
+          publishedAt: true,
+          createdAt: true,
+          updatedAt: true,
+        },
+      },
+    },
+  });
+
+  if (!siteProject) {
+    throw new ApiError(404, "NOT_FOUND", "Public site not found.");
+  }
+
+  const detail = toDetailResponse({
+    siteProject,
+    pages: siteProject.pages,
+    locales: siteProject.locales,
+    currentVersion: siteProject.currentVersion,
+  });
+  const localeDetail =
+    detail.locales.find((item) => item.locale === params.locale) ??
+    detail.locales.find((item) => item.locale === detail.project.defaultLocale) ??
+    null;
+
+  if (!localeDetail) {
+    throw new ApiError(404, "NOT_FOUND", "Requested site locale not found.");
+  }
+
+  const translatedContent = localeDetail.translatedContent as ModelLocaleDraft;
+  const appUrl = getEnv().APP_URL;
+
+  return {
+    project: detail.project,
+    pages: detail.pages,
+    locale: {
+      ...localeDetail,
+      translatedContent,
+      quickAnswer: deriveQuickAnswer(translatedContent),
+    },
+    version: detail.version,
+    jsonLd: buildSiteJsonLd({
+      appUrl,
+      project: detail.project,
+      locale: {
+        locale: localeDetail.locale,
+        urlPath: localeDetail.urlPath,
+        translatedContent,
+      },
+    }),
+    absoluteUrl: `${appUrl.replace(/\/$/, "")}${localeDetail.urlPath}`,
+    alternates: Object.fromEntries(
+      (detail.version?.hreflangs ?? []).map((item) => [
+        item.locale,
+        `${appUrl.replace(/\/$/, "")}${item.href}`,
+      ]),
+    ) as Record<string, string>,
+  };
+}
+
 export async function applySiteChatUpdate(params: {
   tenantContext: TenantContext;
   siteId: string;
@@ -1185,12 +1704,17 @@ export async function applySiteChatUpdate(params: {
     }),
     fetchImpl: params.fetchImpl,
   });
-  const draft = parseModelDraft({
+  const sourceDraft = parseModelDraft({
     text: modelResult.text,
     brief,
-    requestedLocales: brief.locales,
+    requestedLocales: [getSourceLocale(brief)],
     knowledgeItems,
     assistantReplyFallback: "已根据你的要求更新站点草稿。",
+  });
+  const draft = await localizeDraft({
+    brief,
+    sourceDraft,
+    fetchImpl: params.fetchImpl,
   });
   const now = new Date().toISOString();
   const nextSnapshot = buildSnapshot({

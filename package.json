@@ -1,0 +1,25 @@
+{
+  "name": "tradepilot-ai-local-server",
+  "version": "0.1.0",
+  "private": true,
+  "packageManager": "npm@10.9.8",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "dev": "dotenv -e .env -- npm --workspace @tradepilot/web run dev",
+    "build": "dotenv -e .env -- npm --workspace @tradepilot/web run build",
+    "start": "dotenv -e .env -- npm --workspace @tradepilot/web run start",
+    "lint": "turbo run lint --filter=@tradepilot/web",
+    "typecheck": "turbo run typecheck --filter=@tradepilot/web",
+    "test": "turbo run test --filter=@tradepilot/web",
+    "check": "turbo run lint typecheck test --filter=@tradepilot/web",
+    "format": "prettier --write ."
+  },
+  "devDependencies": {
+    "dotenv-cli": "^7.4.4",
+    "prettier": "^3.6.2",
+    "turbo": "^2.5.8"
+  }
+}

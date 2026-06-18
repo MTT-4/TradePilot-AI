@@ -1,0 +1,57 @@
+services:
+  postgres:
+    image: pgvector/pgvector:pg16
+    container_name: tradepilot-postgres
+    environment:
+      POSTGRES_DB: tradepilot
+      POSTGRES_USER: tradepilot
+      POSTGRES_PASSWORD: tradepilot
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U tradepilot -d tradepilot"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7
+    container_name: tradepilot-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  minio:
+    image: minio/minio
+    container_name: tradepilot-minio
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: tradepilot
+      MINIO_ROOT_PASSWORD: tradepilot-local-secret
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    volumes:
+      - minio_data:/data
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "curl -fsS http://localhost:9000/minio/health/live >/dev/null || exit 1"
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  postgres_data:
+  redis_data:
+  minio_data:

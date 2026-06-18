@@ -1,0 +1,33 @@
+{
+  "name": "@tradepilot/web",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev --port 3100",
+    "build": "next build",
+    "start": "next start --port 3100",
+    "lint": "eslint .",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "next": "16.2.9",
+    "pg": "^8.16.3",
+    "react": "19.2.4",
+    "react-dom": "19.2.4",
+    "redis": "^5.9.0",
+    "zod": "^4.1.12"
+  },
+  "devDependencies": {
+    "@tailwindcss/postcss": "^4",
+    "@types/node": "^20",
+    "@types/pg": "^8.15.5",
+    "@types/react": "^19",
+    "@types/react-dom": "^19",
+    "eslint": "^9",
+    "eslint-config-next": "16.2.9",
+    "tailwindcss": "^4",
+    "typescript": "^5",
+    "vitest": "^3.2.4"
+  }
+}

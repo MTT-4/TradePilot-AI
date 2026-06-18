@@ -1,6 +1,13 @@
 #!/bin/bash
 
-REPORT="$HOME/Desktop/tradepilot-ai-server/runtime/logs/mac_env_check_$(date +%Y%m%d_%H%M%S).txt"
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PROJECT_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
+REPORT_DIR="$PROJECT_ROOT/runtime/logs"
+REPORT="$REPORT_DIR/mac_env_check_$(date +%Y%m%d_%H%M%S).txt"
+
+mkdir -p "$REPORT_DIR"
 
 {
 echo "========== TradePilot AI 本机环境检查 =========="
@@ -25,10 +32,10 @@ diskutil info / | grep -E "Volume Name|Total Size|Free Space|File System|Device 
 echo ""
 
 echo "========== 4. 项目目录 =========="
-echo "PROJECT=$HOME/Desktop/tradepilot-ai-server"
-if [ -d "$HOME/Desktop/tradepilot-ai-server" ]; then
+echo "PROJECT=$PROJECT_ROOT"
+if [ -d "$PROJECT_ROOT" ]; then
   echo "✅ 项目目录存在"
-  find "$HOME/Desktop/tradepilot-ai-server" -maxdepth 2 -type d | sort
+  find "$PROJECT_ROOT" -maxdepth 2 -type d | sort
 else
   echo "❌ 项目目录不存在"
 fi
@@ -108,7 +115,7 @@ done
 echo ""
 
 echo "========== 15. 端口占用检查 =========="
-for port in 3000 5432 6379 9000 9001 8080 8081 8082 8025; do
+for port in 3000 3100 5432 6379 9000 9001 8080 8081 8082 8025; do
   if lsof -i :"$port" >/dev/null 2>&1; then
     echo "⚠️ 端口 $port 已被占用"
     lsof -i :"$port" | head -n 5

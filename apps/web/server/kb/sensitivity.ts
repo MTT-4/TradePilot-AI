@@ -42,8 +42,9 @@ export function parseKnowledgeSensitivity(
 export function suggestKnowledgeSensitivity(input: {
   title?: string | null;
   sourceUrl?: string | null;
+  text?: string | null;
 }) {
-  const haystack = `${input.title ?? ""} ${input.sourceUrl ?? ""}`.toLowerCase();
+  const haystack = `${input.title ?? ""} ${input.sourceUrl ?? ""} ${input.text ?? ""}`.toLowerCase();
 
   if (INTERNAL_HINTS.some((hint) => haystack.includes(hint))) {
     return KnowledgeSensitivity.INTERNAL_ONLY;

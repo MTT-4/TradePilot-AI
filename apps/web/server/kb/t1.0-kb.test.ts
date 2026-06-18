@@ -12,6 +12,7 @@ import {
   createKnowledgeDocumentFromUpload,
   createKnowledgeDocumentFromUrl,
   getActiveMembershipForEmail,
+  getKnowledgeChunksForTests,
   getKnowledgeDocumentDetail,
   getKnowledgeDocumentRecordForTests,
   getParsedKnowledgeDocumentText,
@@ -128,10 +129,11 @@ describe("T1.0 knowledge documents", () => {
     await waitForDocumentStatus({
       tenantContext,
       documentId: result.documentId,
-      expected: KnowledgeDocumentStatus.CHUNKING,
+      expected: KnowledgeDocumentStatus.EMBEDDING,
       allowIntermediates: [
         KnowledgeDocumentStatus.UPLOADED,
         KnowledgeDocumentStatus.PARSING,
+        KnowledgeDocumentStatus.CHUNKING,
       ],
     });
 
@@ -145,8 +147,8 @@ describe("T1.0 knowledge documents", () => {
       tenantContext,
       result.documentId,
     );
-    expect(detail.status).toBe("chunking");
-    expect(detail.chunkCount).toBe(0);
+    expect(detail.status).toBe("embedding");
+    expect(detail.chunkCount).toBeGreaterThan(0);
     expect(detail.pendingReviewCount).toBe(0);
 
     const list = await listKnowledgeDocuments(tenantContext);
@@ -212,14 +214,15 @@ describe("T1.0 knowledge documents", () => {
     const settled = await waitForDocumentStatus({
       tenantContext,
       documentId: result.documentId,
-      expected: KnowledgeDocumentStatus.CHUNKING,
+      expected: KnowledgeDocumentStatus.EMBEDDING,
       allowIntermediates: [
         KnowledgeDocumentStatus.UPLOADED,
         KnowledgeDocumentStatus.PARSING,
         KnowledgeDocumentStatus.FAILED,
+        KnowledgeDocumentStatus.CHUNKING,
       ],
     });
-    expect(settled.document?.status).toBe(KnowledgeDocumentStatus.CHUNKING);
+    expect(settled.document?.status).toBe(KnowledgeDocumentStatus.EMBEDDING);
 
     const parsedText = await getParsedKnowledgeDocumentText({
       tenantId: tenantContext.tenantId,
@@ -237,5 +240,69 @@ describe("T1.0 knowledge documents", () => {
         resolve();
       });
     });
+  });
+
+  it("writes tenant-scoped chunks with metadata and chunk sensitivity suggestions", async () => {
+    const text = [
+      "Model: TS-75",
+      "Market: Middle East",
+      "This compressor supports 7.5 bar pressure.",
+      "",
+      "Quote: internal reseller floor price only.",
+      "Contract terms available after approval.",
+    ].join("\n");
+    const file = new File([text], "pricing-sheet.txt", {
+      type: "text/plain",
+    });
+    const result = await createKnowledgeDocumentFromUpload({
+      tenantContext,
+      uploadedByUserId: tenantContext.userId,
+      file,
+      title: "Pricing sheet",
+      product: "TS-75",
+      market: "Middle East",
+    });
+
+    startJobWorker();
+
+    await waitForDocumentStatus({
+      tenantContext,
+      documentId: result.documentId,
+      expected: KnowledgeDocumentStatus.EMBEDDING,
+      allowIntermediates: [
+        KnowledgeDocumentStatus.UPLOADED,
+        KnowledgeDocumentStatus.PARSING,
+        KnowledgeDocumentStatus.CHUNKING,
+      ],
+    });
+
+    const chunks = await getKnowledgeChunksForTests({
+      tenantContext,
+      documentId: result.documentId,
+    });
+
+    expect(chunks.length).toBeGreaterThan(0);
+    expect(chunks.every((chunk) => chunk.tenantId === tenantContext.tenantId)).toBe(
+      true,
+    );
+    expect(
+      chunks.every((chunk) => chunk.namespace === `tenant:${tenantContext.tenantId}`),
+    ).toBe(true);
+    expect(
+      chunks.some((chunk) => chunk.sensitivity === "INTERNAL_ONLY"),
+    ).toBe(true);
+
+    const firstMetadata = chunks[0]?.metadata as
+      | {
+          language?: string;
+          product?: string | null;
+          market?: string | null;
+          isStructured?: boolean;
+        }
+      | undefined;
+    expect(firstMetadata?.language).toBe("en");
+    expect(firstMetadata?.product).toBe("TS-75");
+    expect(firstMetadata?.market).toBe("Middle East");
+    expect(typeof firstMetadata?.isStructured).toBe("boolean");
   });
 });

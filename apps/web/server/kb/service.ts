@@ -13,6 +13,7 @@ import { getTenantPrisma } from "@/server/db/tenant-prisma";
 import type { TenantContext } from "@/server/db/tenant-context";
 import { getPrismaClient } from "@/server/db/prisma";
 import { getTenantObjectBuffer, putTenantObject } from "@/server/storage/object-store";
+import { buildKnowledgeChunks } from "@/server/kb/chunker";
 import { fetchAndParseKnowledgeUrl, parseKnowledgeBuffer } from "@/server/kb/parser";
 import {
   parseKnowledgeSensitivity,
@@ -494,6 +495,9 @@ export async function runParseDocumentJob(params: {
       sourceUrl: true,
       sourceLabel: true,
       locale: true,
+      sensitivity: true,
+      product: true,
+      market: true,
       file: {
         select: {
           id: true,
@@ -565,13 +569,52 @@ export async function runParseDocumentJob(params: {
       sourceLabel: document.sourceLabel ?? parsed.sourceLabel,
     },
   });
+  await params.reportProgress(88);
+
+  await tenantPrisma.knowledgeChunk.deleteMany({
+    where: {
+      documentId: document.id,
+    },
+  });
+
+  const chunks = buildKnowledgeChunks({
+    tenantId: params.tenantId,
+    documentId: document.id,
+    title: parsed.resolvedTitle ?? document.title,
+    locale: document.locale,
+    sourceType: document.sourceType,
+    sourceLabel: document.sourceLabel ?? parsed.sourceLabel,
+    product: document.product,
+    market: document.market,
+    documentSensitivity: document.sensitivity,
+    parsedText: parsed.text,
+  });
+
+  if (chunks.length === 0) {
+    throw new Error("Knowledge document produced no chunks.");
+  }
+
+  await tenantPrisma.knowledgeChunk.createMany({
+    data: chunks,
+  });
   await params.reportProgress(95);
+
+  await tenantPrisma.knowledgeDocument.update({
+    where: {
+      id: document.id,
+    },
+    data: {
+      status: KnowledgeDocumentStatus.EMBEDDING,
+    },
+  });
+  await params.reportProgress(98);
 
   return {
     documentId: document.id,
-    nextStatus: KnowledgeDocumentStatus.CHUNKING.toLowerCase(),
+    nextStatus: KnowledgeDocumentStatus.EMBEDDING.toLowerCase(),
     parsedObjectKey,
     extractedCharacters: parsed.text.length,
+    chunkCount: chunks.length,
     locale: document.locale.toLowerCase(),
   };
 }
@@ -594,6 +637,11 @@ export async function markKnowledgeDocumentParseFailed(params: {
     },
     data: {
       status: KnowledgeDocumentStatus.FAILED,
+    },
+  });
+  await tenantPrisma.knowledgeChunk.deleteMany({
+    where: {
+      documentId: params.documentId,
     },
   });
 }
@@ -625,6 +673,9 @@ export async function getKnowledgeDocumentRecordForTests(params: {
       status: true,
       sourceType: true,
       title: true,
+      sensitivity: true,
+      product: true,
+      market: true,
       file: {
         select: {
           id: true,
@@ -632,6 +683,35 @@ export async function getKnowledgeDocumentRecordForTests(params: {
           objectKey: true,
         },
       },
+    },
+  });
+}
+
+export async function getKnowledgeChunksForTests(params: {
+  tenantContext: TenantContext;
+  documentId: string;
+}) {
+  const tenantPrisma = getTenantPrisma(params.tenantContext);
+
+  return tenantPrisma.knowledgeChunk.findMany({
+    where: {
+      documentId: params.documentId,
+    },
+    orderBy: {
+      chunkIndex: "asc",
+    },
+    select: {
+      id: true,
+      tenantId: true,
+      chunkIndex: true,
+      namespace: true,
+      text: true,
+      sourceCitation: true,
+      locale: true,
+      product: true,
+      market: true,
+      sensitivity: true,
+      metadata: true,
     },
   });
 }

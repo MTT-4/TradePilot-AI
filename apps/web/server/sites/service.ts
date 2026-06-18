@@ -1,8 +1,11 @@
 import {
+  HitlStatus,
+  HitlTaskType,
   JobType,
   KnowledgeSensitivity,
   LocaleCode,
   LocaleDirection,
+  Prisma,
   PublishStatus,
   SiteStatus,
 } from "@prisma/client";
@@ -128,6 +131,21 @@ const snapshotSchema = z.object({
       description: "Public marketing site preview.",
       imageAlt: "TradePilot site preview card",
     }),
+  autofillCandidates: z
+    .array(
+      z.object({
+        id: z.string().trim().min(1).max(40),
+        kind: z.enum(["product", "certification", "blog"]),
+        title: z.string().trim().min(1).max(160),
+        summary: z.string().trim().min(1).max(320),
+        body: z.string().trim().min(1).max(1600),
+        sourceCitations: z.array(z.string().trim().min(1).max(240)).max(6).default([]),
+        status: z.enum(["draft", "pending_publish", "applied"]).default("draft"),
+        updatedAt: z.string().trim().min(1).max(64),
+      }),
+    )
+    .max(12)
+    .default([]),
   conversation: z.array(snapshotConversationMessageSchema).max(40).default([]),
 });
 
@@ -140,6 +158,7 @@ type ModelDraft = z.infer<typeof modelDraftSchema>;
 type SnapshotConversationMessage = z.infer<typeof snapshotConversationMessageSchema>;
 type SiteSnapshot = z.infer<typeof snapshotSchema>;
 type SiteHreflang = SiteSnapshot["hreflangs"][number];
+type AutofillCandidate = SiteSnapshot["autofillCandidates"][number];
 
 type SearchItem = {
   id: string;
@@ -410,6 +429,14 @@ function deriveQuickAnswer(localeDraft: ModelLocaleDraft) {
   }
 
   return localeDraft.subheadline.trim().slice(0, 220);
+}
+
+function buildCandidateSectionId(candidateId: string) {
+  return `autofill-${candidateId}`;
+}
+
+function buildAutofillPageSlug(title: string) {
+  return normalizeSlugPart(title).slice(0, 64) || "autofill-page";
 }
 
 function buildDefaultPreviewChecks(params?: {
@@ -812,7 +839,8 @@ function buildSnapshot(params: {
   draft: ModelDraft;
   previousConversation?: SnapshotConversationMessage[];
   newMessages?: SnapshotConversationMessage[];
-}) {
+  autofillCandidates?: AutofillCandidate[];
+}): SiteSnapshot {
   const conversation = [
     ...(params.previousConversation ?? []),
     ...(params.newMessages ?? []),
@@ -837,6 +865,7 @@ function buildSnapshot(params: {
       brief: params.brief,
       locales: params.draft.locales,
     }),
+    autofillCandidates: params.autofillCandidates ?? [],
     conversation,
   } satisfies SiteSnapshot;
 }
@@ -859,6 +888,7 @@ function finalizeSnapshot(params: {
       brief: params.brief,
       locales: params.draft.locales,
     }),
+    autofillCandidates: params.snapshot.autofillCandidates ?? [],
   } satisfies SiteSnapshot;
 }
 
@@ -1259,7 +1289,10 @@ export async function runGenerateSiteJob(params: {
   };
 }
 
-function getSnapshotFromUnknown(value: unknown, fallbackBrief: SiteBriefInput) {
+function getSnapshotFromUnknown(
+  value: unknown,
+  fallbackBrief: SiteBriefInput,
+): SiteSnapshot {
   const parsed = snapshotSchema.safeParse(value);
 
   if (parsed.success) {
@@ -1274,6 +1307,109 @@ function getSnapshotFromUnknown(value: unknown, fallbackBrief: SiteBriefInput) {
       assistantReply: "Site snapshot recovered with fallback structure.",
     }),
   });
+}
+
+async function createAuditLog(params: {
+  tenantId: string;
+  actorUserId?: string;
+  action: string;
+  entityType: string;
+  entityId: string;
+  metadata?: Prisma.InputJsonValue;
+}) {
+  const prisma = getPrismaClient();
+
+  await prisma.auditLog.create({
+    data: {
+      tenantId: params.tenantId,
+      actorUserId: params.actorUserId,
+      action: params.action,
+      entityType: params.entityType,
+      entityId: params.entityId,
+      metadata: params.metadata,
+    },
+  });
+}
+
+async function createHitlTask(params: {
+  tenantId: string;
+  requestedByUserId?: string;
+  type: HitlTaskType;
+  status: HitlStatus;
+  entityType: string;
+  entityId: string;
+  payload: Prisma.InputJsonValue;
+}) {
+  const prisma = getPrismaClient();
+
+  return prisma.hitlTask.create({
+    data: {
+      tenantId: params.tenantId,
+      requestedByUserId: params.requestedByUserId,
+      type: params.type,
+      status: params.status,
+      entityType: params.entityType,
+      entityId: params.entityId,
+      payload: params.payload,
+    },
+    select: {
+      id: true,
+    },
+  });
+}
+
+function buildDraftFromSnapshot(snapshot: SiteSnapshot) {
+  return {
+    projectName: `${snapshot.brief.product} · ${snapshot.brief.market}`,
+    assistantReply: snapshot.assistantReply,
+    pages: snapshot.pages,
+    locales: snapshot.locales,
+    previewChecks: snapshot.previewChecks,
+    citations: snapshot.citations,
+  } satisfies ModelDraft;
+}
+
+function buildDraftFromDetail(detail: Awaited<ReturnType<typeof getSiteProjectDetail>>) {
+  const brief = siteBriefSchema.parse({
+    market: detail.project.market ?? "Unknown Market",
+    product: detail.project.product ?? detail.project.name,
+    locales: detail.locales.map((item) => item.locale),
+    style: detail.project.style ?? "conversion focused",
+    cta: detail.project.cta ?? "Request a quote",
+  });
+  const snapshot = getSnapshotFromUnknown(
+    detail.version
+      ? {
+          brief,
+          assistantReply: detail.version.assistantReply,
+          pages: detail.pages.map((page) => ({
+            pageType: page.pageType,
+            slug: page.slug,
+            title: page.title,
+            isHomepage: page.isHomepage,
+            sections: Array.isArray((page.content as { sections?: Array<{ id?: string }> })?.sections)
+              ? ((page.content as { sections: Array<{ id: string }> }).sections.map((section) => section.id))
+              : [],
+          })),
+          locales: detail.locales.map((locale) => locale.translatedContent),
+          previewChecks: detail.version.previewChecks,
+          citations: detail.version.citations,
+          badges: detail.version.badges,
+          hreflangs: detail.version.hreflangs,
+          robots: detail.version.robots,
+          ogMeta: detail.version.ogMeta,
+          autofillCandidates: detail.version.autofillCandidates,
+          conversation: detail.version.conversation,
+        }
+      : null,
+    brief,
+  );
+
+  return {
+    brief,
+    snapshot,
+    draft: buildDraftFromSnapshot(snapshot),
+  };
 }
 
 function toDetailResponse(params: {
@@ -1321,6 +1457,12 @@ function toDetailResponse(params: {
     createdAt: Date;
     updatedAt: Date;
   } | null;
+  versions: Array<{
+    id: string;
+    versionNumber: number;
+    note: string | null;
+    createdAt: Date;
+  }>;
 }) {
   const fallbackBrief = siteBriefSchema.parse({
     market: params.siteProject.market ?? "Unknown Market",
@@ -1385,11 +1527,18 @@ function toDetailResponse(params: {
           hreflangs: snapshot.hreflangs,
           robots: snapshot.robots,
           ogMeta: snapshot.ogMeta,
+          autofillCandidates: snapshot.autofillCandidates,
           conversation: snapshot.conversation,
           createdAt: params.currentVersion.createdAt.toISOString(),
           updatedAt: params.currentVersion.updatedAt.toISOString(),
         }
       : null,
+    versionHistory: params.versions.map((version) => ({
+      id: version.id,
+      versionNumber: version.versionNumber,
+      note: version.note,
+      createdAt: version.createdAt.toISOString(),
+    })),
   };
 }
 
@@ -1423,6 +1572,17 @@ export async function getSiteProjectDetail(
           snapshot: true,
           createdAt: true,
           updatedAt: true,
+        },
+      },
+      versions: {
+        orderBy: {
+          versionNumber: "desc",
+        },
+        select: {
+          id: true,
+          versionNumber: true,
+          note: true,
+          createdAt: true,
         },
       },
       pages: {
@@ -1469,7 +1629,839 @@ export async function getSiteProjectDetail(
     pages: siteProject.pages,
     locales: siteProject.locales,
     currentVersion: siteProject.currentVersion,
+    versions: siteProject.versions,
   });
+}
+
+export async function listSiteProjects(tenantContext: TenantContext) {
+  const tenantPrisma = getTenantPrisma(tenantContext);
+  const projects = await tenantPrisma.siteProject.findMany({
+    orderBy: {
+      updatedAt: "desc",
+    },
+    select: {
+      id: true,
+      name: true,
+      slug: true,
+      market: true,
+      product: true,
+      defaultLocale: true,
+      status: true,
+      createdAt: true,
+      updatedAt: true,
+      publishedAt: true,
+      currentVersion: {
+        select: {
+          id: true,
+          versionNumber: true,
+          snapshot: true,
+          note: true,
+        },
+      },
+      locales: {
+        orderBy: {
+          createdAt: "asc",
+        },
+        select: {
+          id: true,
+          locale: true,
+          direction: true,
+          urlPath: true,
+          publishStatus: true,
+        },
+      },
+    },
+  });
+
+  return {
+    items: projects.map((project) => {
+      const brief = siteBriefSchema.parse({
+        market: project.market ?? "Unknown Market",
+        product: project.product ?? project.name,
+        locales: project.locales.map((item) => toApiLocale(item.locale)),
+        style: "conversion focused",
+        cta: "Request a quote",
+      });
+      const snapshot = getSnapshotFromUnknown(project.currentVersion?.snapshot, brief);
+      const publicLocale =
+        project.locales.find((item) => item.locale === project.defaultLocale) ??
+        project.locales[0] ??
+        null;
+
+      return {
+        id: project.id,
+        name: project.name,
+        slug: project.slug,
+        market: project.market,
+        product: project.product,
+        defaultLocale: toApiLocale(project.defaultLocale),
+        status: toApiSiteStatus(project.status),
+        versionNumber: project.currentVersion?.versionNumber ?? 0,
+        localeCount: project.locales.length,
+        locales: project.locales.map((item) => ({
+          id: item.id,
+          locale: toApiLocale(item.locale),
+          direction: item.direction.toLowerCase(),
+          urlPath: item.urlPath,
+          publishStatus: toApiPublishStatus(item.publishStatus),
+        })),
+        publicUrl:
+          project.status === SiteStatus.PUBLISHED && publicLocale
+            ? publicLocale.urlPath
+            : null,
+        previewUrl: `/sites/${project.id}/chat`,
+        badges: snapshot.badges,
+        pendingAutofillCount: snapshot.autofillCandidates.filter(
+          (item) => item.status !== "applied",
+        ).length,
+        createdAt: project.createdAt.toISOString(),
+        updatedAt: project.updatedAt.toISOString(),
+        publishedAt: project.publishedAt?.toISOString() ?? null,
+      };
+    }),
+  };
+}
+
+async function getSiteVersionRecord(params: {
+  tenantContext: TenantContext;
+  siteId: string;
+  versionId: string;
+}) {
+  const tenantPrisma = getTenantPrisma(params.tenantContext);
+  const version = await tenantPrisma.siteVersion.findFirst({
+    where: {
+      id: params.versionId,
+      siteProjectId: params.siteId,
+    },
+    select: {
+      id: true,
+      versionNumber: true,
+      snapshot: true,
+      note: true,
+    },
+  });
+
+  if (!version) {
+    throw new ApiError(404, "NOT_FOUND", "Requested site version not found.");
+  }
+
+  return version;
+}
+
+export async function rollbackSiteProject(params: {
+  tenantContext: TenantContext;
+  siteId: string;
+  versionId: string;
+  requestedByUserId?: string;
+}) {
+  const detail = await getSiteProjectDetail(params.tenantContext, params.siteId);
+  const version = await getSiteVersionRecord({
+    tenantContext: params.tenantContext,
+    siteId: params.siteId,
+    versionId: params.versionId,
+  });
+  const { brief } = buildDraftFromDetail(detail);
+  const snapshot = getSnapshotFromUnknown(version.snapshot, brief);
+  const draft = buildDraftFromSnapshot(snapshot);
+
+  await persistSiteDraft({
+    tenantContext: params.tenantContext,
+    siteProjectId: params.siteId,
+    createdByUserId: params.requestedByUserId,
+    brief,
+    draft,
+    snapshot,
+    note: `Rollback from v${version.versionNumber}`,
+    auditAction: "site_draft_updated",
+  });
+
+  await createAuditLog({
+    tenantId: params.tenantContext.tenantId,
+    actorUserId: params.requestedByUserId,
+    action: "site_version_rolled_back",
+    entityType: "site_project",
+    entityId: params.siteId,
+    metadata: {
+      rolledBackFromVersionId: version.id,
+      rolledBackFromVersionNumber: version.versionNumber,
+    },
+  });
+
+  return getSiteProjectDetail(params.tenantContext, params.siteId);
+}
+
+export async function requestSitePublish(params: {
+  tenantContext: TenantContext;
+  siteId: string;
+  requestedByUserId?: string;
+  mode?: "site_publish" | "autofill_candidate";
+  candidateId?: string;
+}) {
+  const tenantPrisma = getTenantPrisma(params.tenantContext);
+  const detail = await getSiteProjectDetail(params.tenantContext, params.siteId);
+
+  if (!detail.version) {
+    throw new ApiError(409, "CONFLICT", "Site has no version to publish.");
+  }
+
+  const existing = await tenantPrisma.hitlTask.findFirst({
+    where: {
+      type: HitlTaskType.SITE_PUBLISH,
+      status: HitlStatus.PENDING,
+      entityType:
+        params.mode === "autofill_candidate"
+          ? "site_autofill_candidate"
+          : "site_project",
+      entityId: params.mode === "autofill_candidate"
+        ? `${params.siteId}:${params.candidateId ?? ""}`
+        : params.siteId,
+    },
+    select: {
+      id: true,
+    },
+  });
+
+  if (existing) {
+    return {
+      hitlTaskId: existing.id,
+      reused: true,
+    };
+  }
+
+  const hitlTask = await createHitlTask({
+    tenantId: params.tenantContext.tenantId,
+    requestedByUserId: params.requestedByUserId,
+    type: HitlTaskType.SITE_PUBLISH,
+    status: HitlStatus.PENDING,
+    entityType:
+      params.mode === "autofill_candidate"
+        ? "site_autofill_candidate"
+        : "site_project",
+    entityId:
+      params.mode === "autofill_candidate"
+        ? `${params.siteId}:${params.candidateId ?? ""}`
+        : params.siteId,
+    payload: {
+      siteId: params.siteId,
+      versionId: detail.version.id,
+      mode: params.mode ?? "site_publish",
+      candidateId: params.candidateId ?? null,
+    },
+  });
+
+  await createAuditLog({
+    tenantId: params.tenantContext.tenantId,
+    actorUserId: params.requestedByUserId,
+    action:
+      params.mode === "autofill_candidate"
+        ? "site_autofill_publish_requested"
+        : "site_publish_requested",
+    entityType:
+      params.mode === "autofill_candidate"
+        ? "site_autofill_candidate"
+        : "site_project",
+    entityId:
+      params.mode === "autofill_candidate"
+        ? `${params.siteId}:${params.candidateId ?? ""}`
+        : params.siteId,
+    metadata: {
+      siteId: params.siteId,
+      versionId: detail.version.id,
+      candidateId: params.candidateId ?? null,
+    },
+  });
+
+  return {
+    hitlTaskId: hitlTask.id,
+    reused: false,
+  };
+}
+
+export async function setSiteProjectOffline(params: {
+  tenantContext: TenantContext;
+  siteId: string;
+  requestedByUserId?: string;
+}) {
+  const tenantPrisma = getTenantPrisma(params.tenantContext);
+  const now = new Date();
+
+  await tenantPrisma.siteProject.update({
+    where: {
+      id: params.siteId,
+    },
+    data: {
+      status: SiteStatus.OFFLINE,
+      publishedAt: null,
+    },
+  });
+  await tenantPrisma.siteLocale.updateMany({
+    where: {
+      siteProjectId: params.siteId,
+    },
+    data: {
+      publishStatus: PublishStatus.OFFLINE,
+      publishedAt: null,
+    },
+  });
+  await createAuditLog({
+    tenantId: params.tenantContext.tenantId,
+    actorUserId: params.requestedByUserId,
+    action: "site_offlined",
+    entityType: "site_project",
+    entityId: params.siteId,
+    metadata: {
+      offlinedAt: now.toISOString(),
+    },
+  });
+
+  return getSiteProjectDetail(params.tenantContext, params.siteId);
+}
+
+function sanitizeAutofillCandidates(
+  candidates: AutofillCandidate[],
+  allowedCitations: Set<string>,
+) {
+  return candidates.map((candidate) => ({
+    ...candidate,
+    sourceCitations: sanitizeCitations(candidate.sourceCitations, allowedCitations),
+  }));
+}
+
+function buildAutofillPrompt(params: {
+  detail: Awaited<ReturnType<typeof getSiteProjectDetail>>;
+  brief: SiteBriefInput;
+}) {
+  return sanitizePublicPromptText(
+    [
+      "Generate JSON only for site autofill candidates.",
+      `Market: ${params.brief.market}`,
+      `Product: ${params.brief.product}`,
+      `Source locale: ${getSourceLocale(params.brief)}`,
+      `Current site name: ${params.detail.project.name}`,
+      "Create 3 candidates covering one product, one certification, and one blog idea.",
+      "Each candidate needs kind, title, summary, body, sourceCitations.",
+      "Keep sourceCitations only as exact sourceCitation strings from the knowledge context.",
+      "Return JSON: {\"assistantReply\":\"...\",\"candidates\":[...]}",
+    ].join("\n"),
+  );
+}
+
+const autofillResponseSchema = z.object({
+  assistantReply: z.string().trim().min(1).max(500).default("已生成知识库自动补全候选。"),
+  candidates: z
+    .array(
+      z.object({
+        kind: z.enum(["product", "certification", "blog"]),
+        title: z.string().trim().min(1).max(160),
+        summary: z.string().trim().min(1).max(320),
+        body: z.string().trim().min(1).max(1600),
+        sourceCitations: z.array(z.string().trim().min(1).max(240)).max(6).default([]),
+      }),
+    )
+    .min(1)
+    .max(6),
+});
+
+async function generateAutofillCandidatesWithModel(params: {
+  detail: Awaited<ReturnType<typeof getSiteProjectDetail>>;
+  brief: SiteBriefInput;
+  knowledgeItems: SearchItem[];
+  fetchImpl?: typeof fetch;
+}) {
+  const modelResult = await generateDraftWithModel({
+    knowledgeItems: params.knowledgeItems,
+    prompt: buildAutofillPrompt({
+      detail: params.detail,
+      brief: params.brief,
+    }),
+    fetchImpl: params.fetchImpl,
+  });
+
+  try {
+    return autofillResponseSchema.parse(JSON.parse(extractJsonPayload(modelResult.text)));
+  } catch {
+    const allowedCitations = buildAllowedCitationSet(params.knowledgeItems);
+    return {
+      assistantReply: "已生成知识库自动补全候选。",
+      candidates: [
+        {
+          kind: "product" as const,
+          title: `${params.brief.product} product block`,
+          summary: "Add a compact product section grounded in public facts.",
+          body: params.knowledgeItems[0]?.text.slice(0, 600) ??
+            `Introduce ${params.brief.product} with public export-facing messaging.`,
+          sourceCitations: sanitizeCitations(
+            params.knowledgeItems.slice(0, 2).map((item) => item.sourceCitation ?? ""),
+            allowedCitations,
+          ),
+        },
+        {
+          kind: "certification" as const,
+          title: `${params.brief.product} certification proof`,
+          summary: "Add a trust section for certifications or compliance evidence.",
+          body: params.knowledgeItems[1]?.text.slice(0, 600) ??
+            "Summarize public certification evidence without adding private claims.",
+          sourceCitations: sanitizeCitations(
+            params.knowledgeItems.slice(1, 3).map((item) => item.sourceCitation ?? ""),
+            allowedCitations,
+          ),
+        },
+        {
+          kind: "blog" as const,
+          title: `${params.brief.product} export guide`,
+          summary: "Draft a blog page idea that can support SEO and GEO freshness.",
+          body: params.knowledgeItems[2]?.text.slice(0, 600) ??
+            `Create a public educational article for ${params.brief.market} buyers.`,
+          sourceCitations: sanitizeCitations(
+            params.knowledgeItems.slice(0, 3).map((item) => item.sourceCitation ?? ""),
+            allowedCitations,
+          ),
+        },
+      ],
+    };
+  }
+}
+
+export async function generateSiteAutofillCandidates(params: {
+  tenantContext: TenantContext;
+  siteId: string;
+  requestedByUserId?: string;
+  fetchImpl?: typeof fetch;
+}) {
+  const detail = await getSiteProjectDetail(params.tenantContext, params.siteId);
+  const { brief, snapshot } = buildDraftFromDetail(detail);
+  const knowledgeItems = await searchPublicKnowledge({
+    tenantContext: params.tenantContext,
+    brief,
+    extraPrompt: "product certification blog autofill candidate",
+  });
+  const result = await generateAutofillCandidatesWithModel({
+    detail,
+    brief,
+    knowledgeItems,
+    fetchImpl: params.fetchImpl,
+  });
+  const allowedCitations = buildAllowedCitationSet(knowledgeItems);
+  const now = new Date().toISOString();
+  const candidates = sanitizeAutofillCandidates(
+    result.candidates.map((candidate, index) => ({
+      id: `${Date.now()}-${index + 1}`,
+      kind: candidate.kind,
+      title: candidate.title,
+      summary: candidate.summary,
+      body: candidate.body,
+      sourceCitations: candidate.sourceCitations,
+      status: "draft",
+      updatedAt: now,
+    })),
+    allowedCitations,
+  );
+  const tenantPrisma = getTenantPrisma(params.tenantContext);
+
+  if (!detail.version) {
+    throw new ApiError(409, "CONFLICT", "Site has no current version.");
+  }
+
+  await tenantPrisma.siteVersion.update({
+    where: {
+      id: detail.version.id,
+    },
+    data: {
+      snapshot: {
+        ...snapshot,
+        assistantReply: result.assistantReply,
+        autofillCandidates: candidates,
+      },
+    },
+  });
+
+  await createAuditLog({
+    tenantId: params.tenantContext.tenantId,
+    actorUserId: params.requestedByUserId,
+    action: "site_autofill_generated",
+    entityType: "site_project",
+    entityId: params.siteId,
+    metadata: {
+      candidateCount: candidates.length,
+    },
+  });
+
+  return getSiteProjectDetail(params.tenantContext, params.siteId);
+}
+
+export async function updateAutofillCandidate(params: {
+  tenantContext: TenantContext;
+  siteId: string;
+  candidateId: string;
+  requestedByUserId?: string;
+  title?: string;
+  summary?: string;
+  body?: string;
+}) {
+  const detail = await getSiteProjectDetail(params.tenantContext, params.siteId);
+  const { snapshot } = buildDraftFromDetail(detail);
+
+  if (!detail.version) {
+    throw new ApiError(409, "CONFLICT", "Site has no current version.");
+  }
+
+  const nextCandidates = snapshot.autofillCandidates.map((candidate: AutofillCandidate) =>
+    candidate.id === params.candidateId
+      ? {
+          ...candidate,
+          title: params.title?.trim() || candidate.title,
+          summary: params.summary?.trim() || candidate.summary,
+          body: params.body?.trim() || candidate.body,
+          updatedAt: new Date().toISOString(),
+        }
+      : candidate,
+  );
+
+  if (!nextCandidates.some((candidate) => candidate.id === params.candidateId)) {
+    throw new ApiError(404, "NOT_FOUND", "Autofill candidate not found.");
+  }
+
+  const tenantPrisma = getTenantPrisma(params.tenantContext);
+  await tenantPrisma.siteVersion.update({
+    where: {
+      id: detail.version.id,
+    },
+    data: {
+      snapshot: {
+        ...snapshot,
+        autofillCandidates: nextCandidates,
+      },
+    },
+  });
+
+  await createAuditLog({
+    tenantId: params.tenantContext.tenantId,
+    actorUserId: params.requestedByUserId,
+    action: "site_autofill_candidate_updated",
+    entityType: "site_autofill_candidate",
+    entityId: `${params.siteId}:${params.candidateId}`,
+  });
+
+  return getSiteProjectDetail(params.tenantContext, params.siteId);
+}
+
+function applyCandidateToSourceDraft(params: {
+  draft: ModelDraft;
+  candidate: AutofillCandidate;
+}) {
+  const sourceLocale = params.draft.locales[0];
+
+  if (!sourceLocale) {
+    throw new ApiError(500, "INTERNAL", "Missing source locale while applying autofill candidate.");
+  }
+
+  const sectionId = buildCandidateSectionId(params.candidate.id);
+  const nextSourceLocale: ModelLocaleDraft = {
+    ...sourceLocale,
+    sections: sourceLocale.sections.some((section) => section.id === sectionId)
+      ? sourceLocale.sections.map((section) =>
+          section.id === sectionId
+            ? {
+                ...section,
+                heading: params.candidate.title,
+                body: params.candidate.body,
+                sourceCitations: params.candidate.sourceCitations,
+              }
+            : section,
+        )
+      : [
+          ...sourceLocale.sections,
+          {
+            id: sectionId,
+            heading: params.candidate.title,
+            body: params.candidate.body,
+            bullets: [params.candidate.summary],
+            sourceCitations: params.candidate.sourceCitations,
+          },
+        ],
+  };
+  const pageSlug =
+    params.candidate.kind === "blog"
+      ? buildAutofillPageSlug(params.candidate.title)
+      : "home";
+  const nextPages =
+    params.candidate.kind === "blog"
+      ? params.draft.pages.some((page) => page.slug === pageSlug)
+        ? params.draft.pages.map((page) =>
+            page.slug === pageSlug
+              ? {
+                  ...page,
+                  title: params.candidate.title,
+                  sections: Array.from(new Set([...page.sections, sectionId])),
+                }
+              : page,
+          )
+        : [
+            ...params.draft.pages,
+            {
+              pageType: "blog",
+              slug: pageSlug,
+              title: params.candidate.title,
+              isHomepage: false,
+              sections: [sectionId],
+            },
+          ]
+      : params.draft.pages.map((page) =>
+          page.isHomepage
+            ? {
+                ...page,
+                sections: Array.from(new Set([...page.sections, sectionId])),
+              }
+            : page,
+        );
+  const nextCandidates = params.draft.citations.some(
+    (item) => item.sourceCitation === params.candidate.sourceCitations[0],
+  )
+    ? params.draft.citations
+    : [
+        ...params.draft.citations,
+        ...params.candidate.sourceCitations.slice(0, 2).map((citation) => ({
+          sourceCitation: citation,
+          excerpt: params.candidate.body.slice(0, 220),
+        })),
+      ];
+
+  return {
+    ...params.draft,
+    locales: [nextSourceLocale],
+    pages: nextPages,
+    citations: nextCandidates,
+  } satisfies ModelDraft;
+}
+
+async function publishSiteVersion(params: {
+  tenantContext: TenantContext;
+  siteId: string;
+  versionId: string;
+  approvedByUserId?: string;
+}) {
+  const tenantPrisma = getTenantPrisma(params.tenantContext);
+  const version = await tenantPrisma.siteVersion.findFirst({
+    where: {
+      id: params.versionId,
+      siteProjectId: params.siteId,
+    },
+    select: {
+      id: true,
+    },
+  });
+
+  if (!version) {
+    throw new ApiError(404, "NOT_FOUND", "Publish version not found.");
+  }
+
+  const now = new Date();
+  await tenantPrisma.siteProject.update({
+    where: {
+      id: params.siteId,
+    },
+    data: {
+      status: SiteStatus.PUBLISHED,
+      publishedAt: now,
+      currentVersionId: params.versionId,
+    },
+  });
+  await tenantPrisma.siteLocale.updateMany({
+    where: {
+      siteProjectId: params.siteId,
+    },
+    data: {
+      publishStatus: PublishStatus.PUBLISHED,
+      publishedAt: now,
+    },
+  });
+  await createAuditLog({
+    tenantId: params.tenantContext.tenantId,
+    actorUserId: params.approvedByUserId,
+    action: "site_published",
+    entityType: "site_project",
+    entityId: params.siteId,
+    metadata: {
+      versionId: params.versionId,
+    },
+  });
+}
+
+export async function listHitlTasks(params: {
+  tenantContext: TenantContext;
+  status?: "pending" | "approved" | "rejected" | "expired" | "cancelled";
+}) {
+  const tenantPrisma = getTenantPrisma(params.tenantContext);
+  const tasks = await tenantPrisma.hitlTask.findMany({
+    where: {
+      status: params.status
+        ? (params.status.toUpperCase() as HitlStatus)
+        : undefined,
+    },
+    orderBy: {
+      createdAt: "desc",
+    },
+    select: {
+      id: true,
+      type: true,
+      status: true,
+      entityType: true,
+      entityId: true,
+      payload: true,
+      reason: true,
+      createdAt: true,
+      updatedAt: true,
+      resolvedAt: true,
+    },
+  });
+
+  return {
+    items: tasks.map((task) => ({
+      id: task.id,
+      type: task.type.toLowerCase(),
+      status: task.status.toLowerCase(),
+      entityType: task.entityType,
+      entityId: task.entityId,
+      payload: task.payload,
+      reason: task.reason,
+      createdAt: task.createdAt.toISOString(),
+      updatedAt: task.updatedAt.toISOString(),
+      resolvedAt: task.resolvedAt?.toISOString() ?? null,
+    })),
+  };
+}
+
+export async function approveHitlTask(params: {
+  tenantContext: TenantContext;
+  hitlTaskId: string;
+  approvedByUserId?: string;
+}) {
+  const tenantPrisma = getTenantPrisma(params.tenantContext);
+  const task = await tenantPrisma.hitlTask.findUnique({
+    where: {
+      id: params.hitlTaskId,
+    },
+    select: {
+      id: true,
+      type: true,
+      status: true,
+      entityType: true,
+      entityId: true,
+      payload: true,
+    },
+  });
+
+  if (!task) {
+    throw new ApiError(404, "NOT_FOUND", "HITL task not found.");
+  }
+
+  if (task.status !== HitlStatus.PENDING) {
+    throw new ApiError(409, "CONFLICT", "HITL task has already been resolved.");
+  }
+
+  const payload = (task.payload ?? {}) as {
+    siteId?: string;
+    versionId?: string;
+    mode?: "site_publish" | "autofill_candidate";
+    candidateId?: string | null;
+  };
+
+  if (task.type !== HitlTaskType.SITE_PUBLISH || !payload.siteId || !payload.versionId) {
+    throw new ApiError(409, "CONFLICT", "Unsupported HITL task payload.");
+  }
+
+  if (payload.mode === "autofill_candidate" && payload.candidateId) {
+    const detail = await getSiteProjectDetail(params.tenantContext, payload.siteId);
+    const { brief, snapshot, draft } = buildDraftFromDetail(detail);
+    const candidate = snapshot.autofillCandidates.find(
+      (item: AutofillCandidate) => item.id === payload.candidateId,
+    );
+
+    if (!candidate) {
+      throw new ApiError(404, "NOT_FOUND", "Autofill candidate no longer exists.");
+    }
+
+    const sourceDraft = applyCandidateToSourceDraft({
+      draft: {
+        ...draft,
+        locales: [draft.locales[0]],
+      },
+      candidate,
+    });
+    const localizedDraft = await localizeDraft({
+      brief,
+      sourceDraft,
+    });
+    const nextSnapshot = {
+      ...snapshot,
+      autofillCandidates: snapshot.autofillCandidates.map((item: AutofillCandidate) =>
+        item.id === candidate.id
+          ? {
+              ...item,
+              status: "applied",
+              updatedAt: new Date().toISOString(),
+            }
+          : item,
+      ),
+    } satisfies SiteSnapshot;
+
+    await persistSiteDraft({
+      tenantContext: params.tenantContext,
+      siteProjectId: payload.siteId,
+      createdByUserId: params.approvedByUserId,
+      brief,
+      draft: localizedDraft,
+      snapshot: nextSnapshot,
+      note: `Autofill applied: ${candidate.title}`,
+      auditAction: "site_draft_updated",
+    });
+    const updatedDetail = await getSiteProjectDetail(params.tenantContext, payload.siteId);
+
+    if (!updatedDetail.version) {
+      throw new ApiError(500, "INTERNAL", "Updated site version missing after autofill apply.");
+    }
+
+    await publishSiteVersion({
+      tenantContext: params.tenantContext,
+      siteId: payload.siteId,
+      versionId: updatedDetail.version.id,
+      approvedByUserId: params.approvedByUserId,
+    });
+  } else {
+    await publishSiteVersion({
+      tenantContext: params.tenantContext,
+      siteId: payload.siteId,
+      versionId: payload.versionId,
+      approvedByUserId: params.approvedByUserId,
+    });
+  }
+
+  await tenantPrisma.hitlTask.update({
+    where: {
+      id: params.hitlTaskId,
+    },
+    data: {
+      status: HitlStatus.APPROVED,
+      approvedByUserId: params.approvedByUserId,
+      resolvedAt: new Date(),
+    },
+  });
+
+  await createAuditLog({
+    tenantId: params.tenantContext.tenantId,
+    actorUserId: params.approvedByUserId,
+    action: "hitl_task_approved",
+    entityType: task.entityType,
+    entityId: task.entityId,
+    metadata: {
+      hitlTaskId: task.id,
+    },
+  });
+
+  return {
+    hitlTaskId: params.hitlTaskId,
+    status: "approved",
+  };
 }
 
 function buildSiteJsonLd(params: {
@@ -1527,6 +2519,7 @@ function buildSiteJsonLd(params: {
 export async function getPublicSiteLocalePageData(params: {
   slug: string;
   locale: ApiLocale;
+  allowDraft?: boolean;
 }) {
   const prisma = getPrismaClient();
   const siteProject = await prisma.siteProject.findFirst({
@@ -1554,6 +2547,17 @@ export async function getPublicSiteLocalePageData(params: {
           snapshot: true,
           createdAt: true,
           updatedAt: true,
+        },
+      },
+      versions: {
+        orderBy: {
+          versionNumber: "desc",
+        },
+        select: {
+          id: true,
+          versionNumber: true,
+          note: true,
+          createdAt: true,
         },
       },
       pages: {
@@ -1595,11 +2599,16 @@ export async function getPublicSiteLocalePageData(params: {
     throw new ApiError(404, "NOT_FOUND", "Public site not found.");
   }
 
+  if (!params.allowDraft && siteProject.status !== SiteStatus.PUBLISHED) {
+    throw new ApiError(404, "NOT_FOUND", "Public site not found.");
+  }
+
   const detail = toDetailResponse({
     siteProject,
     pages: siteProject.pages,
     locales: siteProject.locales,
     currentVersion: siteProject.currentVersion,
+    versions: siteProject.versions,
   });
   const localeDetail =
     detail.locales.find((item) => item.locale === params.locale) ??
@@ -1686,6 +2695,17 @@ export async function applySiteChatUpdate(params: {
         ogVk: true,
         trackingLinks: true,
       },
+      hreflangs: detail.version?.hreflangs ?? [],
+      robots: detail.version?.robots ?? buildRobotsRules(),
+      ogMeta:
+        detail.version?.ogMeta ??
+        buildOgMeta({
+          brief,
+          locales: detail.locales.map(
+            (locale) => locale.translatedContent as ModelLocaleDraft,
+          ),
+        }),
+      autofillCandidates: detail.version?.autofillCandidates ?? [],
       conversation: detail.version?.conversation ?? [],
     },
     brief,
@@ -1721,6 +2741,7 @@ export async function applySiteChatUpdate(params: {
     brief,
     draft,
     previousConversation: snapshot.conversation,
+    autofillCandidates: snapshot.autofillCandidates,
     newMessages: [
       {
         role: "user",

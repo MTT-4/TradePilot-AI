@@ -10,9 +10,15 @@ import {
 } from "@/server/kb/service";
 import {
   applySiteChatUpdate,
+  approveHitlTask,
   createSiteGenerationRequest,
   getPublicSiteLocalePageData,
   getSiteProjectDetail,
+  listHitlTasks,
+  requestSitePublish,
+  rollbackSiteProject,
+  generateSiteAutofillCandidates,
+  updateAutofillCandidate,
 } from "@/server/sites/service";
 
 const originalFetch = globalThis.fetch;
@@ -518,6 +524,7 @@ describe("T2.1 site generation", () => {
       const publicPage = await getPublicSiteLocalePageData({
         slug: detail.project.slug,
         locale: "ar",
+        allowDraft: true,
       });
       expect(publicPage.locale.direction).toBe("rtl");
       expect(publicPage.locale.quickAnswer.length).toBeGreaterThan(0);
@@ -603,6 +610,247 @@ describe("T2.1 site generation", () => {
           item.role === "assistant" && item.content.includes("信任模块"),
         ),
       ).toBe(true);
+    },
+    20000,
+  );
+
+  it(
+    "requires HITL approval before a site goes live and supports rollback",
+    async () => {
+      const tag = `site-publish-${Date.now()}`;
+      const publicDoc = await createKnowledgeDocumentFromUpload({
+        tenantContext,
+        uploadedByUserId: tenantContext.userId,
+        file: new File(
+          [`Pressure vessel ${tag} is export ready and carries public compliance support.`],
+          "publish-site.txt",
+          { type: "text/plain" },
+        ),
+        title: `Publish source ${tag}`,
+        product: `Pressure vessel ${tag}`,
+        market: `EU-${tag}`,
+        sensitivity: "public",
+      });
+
+      startJobWorker();
+      await waitForDocumentStatus({
+        tenantContext,
+        documentId: publicDoc.documentId,
+        expected: KnowledgeDocumentStatus.READY,
+      });
+
+      const queued = await createSiteGenerationRequest({
+        tenantContext,
+        requestedByUserId: tenantContext.userId,
+        brief: {
+          market: `EU-${tag}`,
+          product: `Pressure vessel ${tag}`,
+          locales: ["en", "ar"],
+          style: "credible technical",
+          cta: "Request distributor pricing",
+        },
+      });
+      await waitForJobStatus({
+        tenantContext,
+        jobId: queued.jobId,
+        expected: JobStatus.SUCCEEDED,
+      });
+
+      const initial = await getSiteProjectDetail(tenantContext, queued.siteId);
+      await expect(
+        getPublicSiteLocalePageData({
+          slug: initial.project.slug,
+          locale: "en",
+        }),
+      ).rejects.toMatchObject({
+        code: "NOT_FOUND",
+      });
+
+      const publishRequest = await requestSitePublish({
+        tenantContext,
+        siteId: queued.siteId,
+        requestedByUserId: tenantContext.userId,
+      });
+      expect(publishRequest.hitlTaskId).toBeTruthy();
+
+      const pendingTasks = await listHitlTasks({
+        tenantContext,
+        status: "pending",
+      });
+      expect(
+        pendingTasks.items.some((item) => item.id === publishRequest.hitlTaskId),
+      ).toBe(true);
+
+      await approveHitlTask({
+        tenantContext,
+        hitlTaskId: publishRequest.hitlTaskId,
+        approvedByUserId: tenantContext.userId,
+      });
+
+      const published = await getSiteProjectDetail(tenantContext, queued.siteId);
+      expect(published.project.status).toBe("published");
+      expect(
+        published.locales.every((item) => item.publishStatus === "published"),
+      ).toBe(true);
+
+      const livePage = await getPublicSiteLocalePageData({
+        slug: published.project.slug,
+        locale: "en",
+      });
+      expect(livePage.project.status).toBe("published");
+
+      const edited = await applySiteChatUpdate({
+        tenantContext,
+        siteId: queued.siteId,
+        message: "Add a compact buyer trust block without inventing customer names.",
+        requestedByUserId: tenantContext.userId,
+        fetchImpl: globalThis.fetch,
+      });
+      expect(edited.project.status).toBe("draft");
+      expect(edited.version?.versionNumber).toBeGreaterThan(1);
+
+      const rolledBack = await rollbackSiteProject({
+        tenantContext,
+        siteId: queued.siteId,
+        versionId: published.version!.id,
+        requestedByUserId: tenantContext.userId,
+      });
+      expect(rolledBack.version?.versionNumber).toBeGreaterThan(edited.version!.versionNumber);
+      expect(
+        rolledBack.locales.every((locale) =>
+          (
+            locale.translatedContent as {
+              sections: Array<{ id: string }>;
+            }
+          ).sections.every((section) => section.id !== "trust"),
+        ),
+      ).toBe(true);
+    },
+    20000,
+  );
+
+  it(
+    "generates autofill candidates that require approval before they are applied",
+    async () => {
+      const tag = `site-autofill-${Date.now()}`;
+      const publicDoc = await createKnowledgeDocumentFromUpload({
+        tenantContext,
+        uploadedByUserId: tenantContext.userId,
+        file: new File(
+          [
+            `Industrial dryer ${tag} offers corrosion-resistant assembly, CE support, and export packaging for distributors.`,
+          ],
+          "autofill-site.txt",
+          { type: "text/plain" },
+        ),
+        title: `Autofill source ${tag}`,
+        product: `Industrial dryer ${tag}`,
+        market: `LATAM-${tag}`,
+        sensitivity: "public",
+      });
+
+      startJobWorker();
+      await waitForDocumentStatus({
+        tenantContext,
+        documentId: publicDoc.documentId,
+        expected: KnowledgeDocumentStatus.READY,
+      });
+
+      const queued = await createSiteGenerationRequest({
+        tenantContext,
+        requestedByUserId: tenantContext.userId,
+        brief: {
+          market: `LATAM-${tag}`,
+          product: `Industrial dryer ${tag}`,
+          locales: ["en", "ru"],
+          style: "industrial clean",
+          cta: "Request distributor pricing",
+        },
+      });
+      await waitForJobStatus({
+        tenantContext,
+        jobId: queued.jobId,
+        expected: JobStatus.SUCCEEDED,
+      });
+
+      await requestSitePublish({
+        tenantContext,
+        siteId: queued.siteId,
+        requestedByUserId: tenantContext.userId,
+      }).then((task) =>
+        approveHitlTask({
+          tenantContext,
+          hitlTaskId: task.hitlTaskId,
+          approvedByUserId: tenantContext.userId,
+        }),
+      );
+
+      const generated = await generateSiteAutofillCandidates({
+        tenantContext,
+        siteId: queued.siteId,
+        requestedByUserId: tenantContext.userId,
+        fetchImpl: globalThis.fetch,
+      });
+      expect(generated.version?.autofillCandidates.length).toBeGreaterThan(0);
+
+      const candidate = generated.version!.autofillCandidates[0]!;
+      const updated = await updateAutofillCandidate({
+        tenantContext,
+        siteId: queued.siteId,
+        candidateId: candidate.id,
+        requestedByUserId: tenantContext.userId,
+        body: `${candidate.body} Edited candidate body for approval.`,
+      });
+      const updatedCandidate = updated.version!.autofillCandidates.find(
+        (item: { id: string }) => item.id === candidate.id,
+      );
+      expect(updatedCandidate?.body).toContain("Edited candidate body");
+
+      const task = await requestSitePublish({
+        tenantContext,
+        siteId: queued.siteId,
+        requestedByUserId: tenantContext.userId,
+        mode: "autofill_candidate",
+        candidateId: candidate.id,
+      });
+      const beforeApprove = await getSiteProjectDetail(tenantContext, queued.siteId);
+      expect(
+        beforeApprove.locales.every((locale) =>
+          (
+            locale.translatedContent as {
+              sections: Array<{ id: string }>;
+            }
+          ).sections.every(
+            (section) => section.id !== `autofill-${candidate.id}`,
+          ),
+        ),
+      ).toBe(true);
+
+      await approveHitlTask({
+        tenantContext,
+        hitlTaskId: task.hitlTaskId,
+        approvedByUserId: tenantContext.userId,
+      });
+
+      const afterApprove = await getSiteProjectDetail(tenantContext, queued.siteId);
+      expect(afterApprove.project.status).toBe("published");
+      expect(
+        afterApprove.locales.every((locale) =>
+          (
+            locale.translatedContent as {
+              sections: Array<{ id: string }>;
+            }
+          ).sections.some(
+            (section) => section.id === `autofill-${candidate.id}`,
+          ),
+        ),
+      ).toBe(true);
+      expect(
+        afterApprove.version?.autofillCandidates.find(
+          (item: { id: string }) => item.id === candidate.id,
+        )
+          ?.status,
+      ).toBe("applied");
     },
     20000,
   );

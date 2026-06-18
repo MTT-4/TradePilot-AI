@@ -15,11 +15,20 @@
     "typecheck": "turbo run typecheck --filter=@tradepilot/web",
     "test": "turbo run test --filter=@tradepilot/web",
     "check": "turbo run lint typecheck test --filter=@tradepilot/web",
-    "format": "prettier --write ."
+    "format": "prettier --write .",
+    "prisma:generate": "dotenv -e .env -- prisma generate",
+    "prisma:migrate": "dotenv -e .env -- prisma migrate dev",
+    "prisma:seed": "dotenv -e .env -- prisma db seed",
+    "prisma:assert-tenant": "node tools/check/assert-tenant-fields.mjs"
+  },
+  "dependencies": {
+    "@prisma/client": "^6.9.0"
   },
   "devDependencies": {
     "dotenv-cli": "^7.4.4",
     "prettier": "^3.6.2",
+    "prisma": "^6.9.0",
+    "tsx": "^4.20.6",
     "turbo": "^2.5.8"
   }
 }

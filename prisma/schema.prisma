@@ -1,0 +1,1009 @@
+generator client {
+  provider        = "prisma-client-js"
+  previewFeatures = ["postgresqlExtensions"]
+}
+
+datasource db {
+  provider   = "postgresql"
+  url        = env("DATABASE_URL")
+  extensions = [vector]
+}
+
+enum LocaleCode {
+  EN @map("en")
+  AR @map("ar")
+  RU @map("ru")
+  FR @map("fr")
+  DE @map("de")
+  PT @map("pt")
+  ZH @map("zh")
+}
+
+enum MembershipRole {
+  OWNER    @map("owner")
+  ADMIN    @map("admin")
+  OPERATOR @map("operator")
+  SALES    @map("sales")
+  VIEWER   @map("viewer")
+}
+
+enum MembershipStatus {
+  INVITED   @map("invited")
+  ACTIVE    @map("active")
+  SUSPENDED @map("suspended")
+}
+
+enum FileSourceType {
+  UPLOAD           @map("upload")
+  URL              @map("url")
+  GENERATED        @map("generated")
+  EMAIL_ATTACHMENT @map("email_attachment")
+}
+
+enum FileKind {
+  DOCUMENT @map("document")
+  IMAGE    @map("image")
+  EXPORT   @map("export")
+  OTHER    @map("other")
+}
+
+enum KnowledgeDocumentStatus {
+  UPLOADED  @map("uploaded")
+  PARSING   @map("parsing")
+  CHUNKING  @map("chunking")
+  EMBEDDING @map("embedding")
+  READY     @map("ready")
+  FAILED    @map("failed")
+}
+
+enum KnowledgeSensitivity {
+  PUBLIC        @map("public")
+  INTERNAL_ONLY @map("internal_only")
+}
+
+enum KnowledgeReviewStatus {
+  PENDING   @map("pending")
+  APPROVED  @map("approved")
+  CORRECTED @map("corrected")
+}
+
+enum JobType {
+  PARSE_DOCUMENT        @map("parse_document")
+  EMBED_DOCUMENT        @map("embed_document")
+  GENERATE_SITE         @map("generate_site")
+  TRANSLATE_SITE        @map("translate_site")
+  GENERATE_CONTENT_PACK @map("generate_content_pack")
+  GENERATE_REPLY        @map("generate_reply")
+  IMPORT_INBOUND_EMAIL  @map("import_inbound_email")
+}
+
+enum JobStatus {
+  QUEUED    @map("queued")
+  RUNNING   @map("running")
+  SUCCEEDED @map("succeeded")
+  FAILED    @map("failed")
+  RETRYING  @map("retrying")
+}
+
+enum SiteStatus {
+  DRAFT     @map("draft")
+  PUBLISHED @map("published")
+  OFFLINE   @map("offline")
+}
+
+enum LocaleDirection {
+  LTR @map("ltr")
+  RTL @map("rtl")
+}
+
+enum PublishStatus {
+  PENDING   @map("pending")
+  PUBLISHED @map("published")
+  FAILED    @map("failed")
+  OFFLINE   @map("offline")
+}
+
+enum ContentPackStatus {
+  DRAFT      @map("draft")
+  PROCESSING @map("processing")
+  READY      @map("ready")
+  FAILED     @map("failed")
+}
+
+enum MediaType {
+  IMAGE        @map("image")
+  CAROUSEL     @map("carousel")
+  VIDEO_SCRIPT @map("video_script")
+}
+
+enum Platform {
+  LINKEDIN  @map("linkedin")
+  FACEBOOK  @map("facebook")
+  INSTAGRAM @map("instagram")
+  REELS     @map("reels")
+  TIKTOK    @map("tiktok")
+  YOUTUBE   @map("youtube")
+  SHORTS    @map("shorts")
+  VK_CLIPS  @map("vk_clips")
+  RUTUBE    @map("rutube")
+}
+
+enum CampaignStatus {
+  DRAFT     @map("draft")
+  ACTIVE    @map("active")
+  PAUSED    @map("paused")
+  COMPLETED @map("completed")
+}
+
+enum LeadStatus {
+  NEW       @map("new")
+  CONTACTED @map("contacted")
+  FOLLOWING @map("following")
+  WON       @map("won")
+  LOST      @map("lost")
+}
+
+enum LeadScore {
+  A
+  B
+  C
+}
+
+enum InquirySourceType {
+  FORM  @map("form")
+  EMAIL @map("email")
+}
+
+enum InboundEmailStatus {
+  RECEIVED  @map("received")
+  PROCESSED @map("processed")
+  SPAM      @map("spam")
+  FAILED    @map("failed")
+}
+
+enum OpportunityStage {
+  NEW       @map("new")
+  CONTACTED @map("contacted")
+  QUOTED    @map("quoted")
+  WON       @map("won")
+  LOST      @map("lost")
+}
+
+enum CrmActivityType {
+  NOTE         @map("note")
+  STAGE_CHANGE @map("stage_change")
+  FOLLOW_UP    @map("follow_up")
+  EMAIL        @map("email")
+  REPLY_SENT   @map("reply_sent")
+}
+
+enum ReplyStatus {
+  DRAFT            @map("draft")
+  PENDING_APPROVAL @map("pending_approval")
+  SENT             @map("sent")
+  REJECTED         @map("rejected")
+}
+
+enum HitlTaskType {
+  SITE_PUBLISH    @map("site_publish")
+  CONTENT_PUBLISH @map("content_publish")
+  REPLY_SEND      @map("reply_send")
+}
+
+enum HitlStatus {
+  PENDING   @map("pending")
+  APPROVED  @map("approved")
+  REJECTED  @map("rejected")
+  EXPIRED   @map("expired")
+  CANCELLED @map("cancelled")
+}
+
+enum NotificationType {
+  HITL_PENDING @map("hitl_pending")
+  LEAD_NEW     @map("lead_new")
+  FOLLOW_UP    @map("follow_up")
+  JOB_FAILED   @map("job_failed")
+  SYSTEM       @map("system")
+}
+
+enum NotificationStatus {
+  UNREAD @map("unread")
+  READ   @map("read")
+}
+
+enum ModelRoute {
+  OPENAI           @map("openai")
+  GOOGLE_TRANSLATE @map("google_translate")
+  LOCAL_QWEN       @map("local_qwen")
+  LOCAL_BGE        @map("local_bge")
+}
+
+enum ModelTaskType {
+  GENERATE  @map("generate")
+  TRANSLATE @map("translate")
+  EMBED     @map("embed")
+  CLASSIFY  @map("classify")
+}
+
+enum DataRequestType {
+  EXPORT @map("export")
+  DELETE @map("delete")
+}
+
+enum DataRequestStatus {
+  PENDING    @map("pending")
+  PROCESSING @map("processing")
+  COMPLETED  @map("completed")
+  REJECTED   @map("rejected")
+}
+
+model Tenant {
+  id             String         @id @default(cuid())
+  name           String
+  slug           String         @unique
+  defaultLocale  LocaleCode     @map("default_locale")
+  createdAt      DateTime       @default(now()) @map("created_at")
+  updatedAt      DateTime       @updatedAt @map("updated_at")
+  memberships    Membership[]
+  brandKits      BrandKit[]
+  files          File[]
+  jobs           Job[]
+  auditLogs      AuditLog[]
+  modelInvokes   ModelInvocation[]
+  creditLedger   CreditLedger[]
+  knowledgeDocs  KnowledgeDocument[]
+  knowledgeChunks KnowledgeChunk[]
+  knowledgeReviews KnowledgeReview[]
+  knowledgeQaPairs KnowledgeQaPair[]
+  siteProjects   SiteProject[]
+  sitePages      SitePage[]
+  siteLocales    SiteLocale[]
+  siteVersions   SiteVersion[]
+  campaigns      Campaign[]
+  contentPacks   ContentPack[]
+  contentItems   ContentItem[]
+  trackingLinks  TrackingLink[]
+  clickEvents    ClickEvent[]
+  contacts       Contact[]
+  leads          Lead[]
+  inquiries      Inquiry[]
+  inboundEmails  InboundEmail[]
+  opportunities  Opportunity[]
+  crmActivities  CrmActivity[]
+  replies        Reply[]
+  hitlTasks      HitlTask[]
+  notifications  Notification[]
+  dataRequests   DataRequest[]
+
+  @@map("tenants")
+}
+
+model User {
+  id               String          @id @default(cuid())
+  email            String          @unique
+  name             String
+  passwordHash     String          @map("password_hash")
+  twoFactorEnabled Boolean         @default(false) @map("two_factor_enabled")
+  totpSecret       String?         @map("totp_secret")
+  emailVerifiedAt  DateTime?       @map("email_verified_at")
+  createdAt        DateTime        @default(now()) @map("created_at")
+  updatedAt        DateTime        @updatedAt @map("updated_at")
+  memberships      Membership[]
+  uploadedFiles    File[]          @relation("FileUploadedBy")
+  requestedJobs    Job[]           @relation("JobRequestedBy")
+  auditLogs        AuditLog[]      @relation("AuditActor")
+  modelInvocations ModelInvocation[]
+  creditEntries    CreditLedger[]
+  brandKits        BrandKit[]      @relation("BrandKitOwner")
+  knowledgeDocuments KnowledgeDocument[] @relation("KnowledgeDocumentUploader")
+  knowledgeReviews KnowledgeReview[]     @relation("KnowledgeReviewReviewer")
+  knowledgeQaPairs KnowledgeQaPair[]     @relation("KnowledgeQaPairAuthor")
+  siteProjects     SiteProject[]   @relation("SiteProjectCreator")
+  siteVersions     SiteVersion[]   @relation("SiteVersionCreator")
+  contentPacks     ContentPack[]   @relation("ContentPackCreator")
+  contentItemsOwned ContentItem[]  @relation("ContentItemOwner")
+  leadsOwned       Lead[]          @relation("LeadOwner")
+  opportunitiesOwned Opportunity[] @relation("OpportunityOwner")
+  crmActivities    CrmActivity[]   @relation("CrmActivityActor")
+  repliesCreated   Reply[]         @relation("ReplyCreatedBy")
+  repliesApproved  Reply[]         @relation("ReplyApprovedBy")
+  hitlRequested    HitlTask[]      @relation("HitlRequestedBy")
+  hitlAssigned     HitlTask[]      @relation("HitlAssignedTo")
+  hitlApproved     HitlTask[]      @relation("HitlApprovedBy")
+  hitlRejected     HitlTask[]      @relation("HitlRejectedBy")
+  notifications    Notification[]
+  dataRequests     DataRequest[]
+
+  @@map("users")
+}
+
+model Membership {
+  id         String           @id @default(cuid())
+  tenantId   String           @map("tenant_id")
+  userId     String           @map("user_id")
+  role       MembershipRole
+  status     MembershipStatus @default(ACTIVE)
+  createdAt  DateTime         @default(now()) @map("created_at")
+  updatedAt  DateTime         @updatedAt @map("updated_at")
+  tenant     Tenant           @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  user       User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, userId])
+  @@index([tenantId])
+  @@index([userId])
+  @@map("memberships")
+}
+
+model PlatformRule {
+  id          String    @id @default(cuid())
+  platform    Platform  @unique
+  displayName String    @map("display_name")
+  rules       Json
+  createdAt   DateTime  @default(now()) @map("created_at")
+  updatedAt   DateTime  @updatedAt @map("updated_at")
+
+  @@map("platform_rules")
+}
+
+model BrandKit {
+  id             String   @id @default(cuid())
+  tenantId       String   @map("tenant_id")
+  createdByUserId String? @map("created_by_user_id")
+  name           String
+  companyName    String   @map("company_name")
+  primaryColor   String?  @map("primary_color")
+  secondaryColor String?  @map("secondary_color")
+  logoUrl        String?  @map("logo_url")
+  metadata       Json?
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+  tenant         Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  createdBy      User?    @relation("BrandKitOwner", fields: [createdByUserId], references: [id], onDelete: SetNull)
+
+  @@index([tenantId])
+  @@map("brand_kits")
+}
+
+model File {
+  id               String         @id @default(cuid())
+  tenantId         String         @map("tenant_id")
+  uploadedByUserId String?        @map("uploaded_by_user_id")
+  sourceType       FileSourceType @map("source_type")
+  kind             FileKind
+  originalName     String         @map("original_name")
+  mimeType         String         @map("mime_type")
+  sizeBytes        Int            @map("size_bytes")
+  bucket           String
+  objectKey        String         @map("object_key")
+  checksum         String?
+  sourceUrl        String?        @map("source_url")
+  createdAt        DateTime       @default(now()) @map("created_at")
+  updatedAt        DateTime       @updatedAt @map("updated_at")
+  tenant           Tenant         @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  uploadedBy       User?          @relation("FileUploadedBy", fields: [uploadedByUserId], references: [id], onDelete: SetNull)
+  knowledgeDocuments KnowledgeDocument[]
+
+  @@unique([tenantId, objectKey])
+  @@index([tenantId])
+  @@map("files")
+}
+
+model Job {
+  id               String    @id @default(cuid())
+  tenantId         String    @map("tenant_id")
+  requestedByUserId String?  @map("requested_by_user_id")
+  type             JobType
+  status           JobStatus
+  progress         Int       @default(0)
+  attempts         Int       @default(0)
+  maxAttempts      Int       @default(3) @map("max_attempts")
+  idempotencyKey   String?   @map("idempotency_key")
+  input            Json?
+  output           Json?
+  error            String?
+  createdAt        DateTime  @default(now()) @map("created_at")
+  updatedAt        DateTime  @updatedAt @map("updated_at")
+  tenant           Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  requestedBy      User?     @relation("JobRequestedBy", fields: [requestedByUserId], references: [id], onDelete: SetNull)
+
+  @@unique([tenantId, idempotencyKey])
+  @@index([tenantId])
+  @@map("jobs")
+}
+
+model AuditLog {
+  id          String   @id @default(cuid())
+  tenantId    String   @map("tenant_id")
+  actorUserId String?  @map("actor_user_id")
+  action      String
+  entityType  String   @map("entity_type")
+  entityId    String?  @map("entity_id")
+  metadata    Json?
+  createdAt   DateTime @default(now()) @map("created_at")
+  tenant      Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  actor       User?    @relation("AuditActor", fields: [actorUserId], references: [id], onDelete: SetNull)
+
+  @@index([tenantId])
+  @@index([entityType, entityId])
+  @@map("audit_logs")
+}
+
+model ModelInvocation {
+  id              String        @id @default(cuid())
+  tenantId        String        @map("tenant_id")
+  userId          String?       @map("user_id")
+  route           ModelRoute
+  taskType        ModelTaskType @map("task_type")
+  modelName       String        @map("model_name")
+  containsPii     Boolean       @default(false) @map("contains_pii")
+  tokensInput     Int?          @map("tokens_input")
+  tokensOutput    Int?          @map("tokens_output")
+  latencyMs       Int?          @map("latency_ms")
+  costUsd         Decimal?      @map("cost_usd") @db.Decimal(12, 4)
+  reason          String?
+  requestSummary  String?       @map("request_summary")
+  createdAt       DateTime      @default(now()) @map("created_at")
+  tenant          Tenant        @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  user            User?         @relation(fields: [userId], references: [id], onDelete: SetNull)
+  creditEntries   CreditLedger[]
+  reply           Reply?
+
+  @@index([tenantId])
+  @@index([route, containsPii])
+  @@map("model_invocations")
+}
+
+model CreditLedger {
+  id               String           @id @default(cuid())
+  tenantId         String           @map("tenant_id")
+  modelInvocationId String?         @map("model_invocation_id")
+  userId           String?          @map("user_id")
+  deltaCredits     Decimal          @map("delta_credits") @db.Decimal(12, 2)
+  balanceAfter     Decimal?         @map("balance_after") @db.Decimal(12, 2)
+  description      String?
+  createdAt        DateTime         @default(now()) @map("created_at")
+  tenant           Tenant           @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  modelInvocation  ModelInvocation? @relation(fields: [modelInvocationId], references: [id], onDelete: SetNull)
+  user             User?            @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([tenantId])
+  @@map("credit_ledger")
+}
+
+model KnowledgeDocument {
+  id               String                  @id @default(cuid())
+  tenantId         String                  @map("tenant_id")
+  fileId           String?                 @map("file_id")
+  uploadedByUserId String?                 @map("uploaded_by_user_id")
+  title            String
+  sourceType       FileSourceType          @map("source_type")
+  sourceUrl        String?                 @map("source_url")
+  status           KnowledgeDocumentStatus
+  sensitivity      KnowledgeSensitivity
+  locale           LocaleCode
+  product          String?
+  market           String?
+  sourceLabel      String?                 @map("source_label")
+  createdAt        DateTime                @default(now()) @map("created_at")
+  updatedAt        DateTime                @updatedAt @map("updated_at")
+  tenant           Tenant                  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  file             File?                   @relation(fields: [fileId], references: [id], onDelete: SetNull)
+  uploadedBy       User?                   @relation("KnowledgeDocumentUploader", fields: [uploadedByUserId], references: [id], onDelete: SetNull)
+  chunks           KnowledgeChunk[]
+  reviews          KnowledgeReview[]
+  qaPairs          KnowledgeQaPair[]
+
+  @@index([tenantId])
+  @@index([status, sensitivity])
+  @@map("knowledge_documents")
+}
+
+model KnowledgeChunk {
+  id             String               @id @default(cuid())
+  tenantId       String               @map("tenant_id")
+  documentId     String               @map("document_id")
+  chunkIndex     Int                  @map("chunk_index")
+  namespace      String
+  text           String               @db.Text
+  sourceCitation String?              @map("source_citation")
+  locale         LocaleCode
+  product        String?
+  market         String?
+  sensitivity    KnowledgeSensitivity
+  metadata       Json?
+  embedding      Unsupported("vector(1024)")?
+  createdAt      DateTime             @default(now()) @map("created_at")
+  updatedAt      DateTime             @updatedAt @map("updated_at")
+  tenant         Tenant               @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  document       KnowledgeDocument    @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  reviews        KnowledgeReview[]
+
+  @@unique([documentId, chunkIndex])
+  @@index([tenantId])
+  @@index([tenantId, namespace])
+  @@map("knowledge_chunks")
+}
+
+model KnowledgeReview {
+  id             String                @id @default(cuid())
+  tenantId       String                @map("tenant_id")
+  documentId     String                @map("document_id")
+  chunkId        String?               @map("chunk_id")
+  reviewedByUserId String?             @map("reviewed_by_user_id")
+  question       String?
+  answer         String?
+  correctedText  String?               @map("corrected_text")
+  sourceCitation String?               @map("source_citation")
+  sensitivity    KnowledgeSensitivity
+  status         KnowledgeReviewStatus
+  createdAt      DateTime              @default(now()) @map("created_at")
+  updatedAt      DateTime              @updatedAt @map("updated_at")
+  tenant         Tenant                @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  document       KnowledgeDocument     @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  chunk          KnowledgeChunk?       @relation(fields: [chunkId], references: [id], onDelete: SetNull)
+  reviewedBy     User?                 @relation("KnowledgeReviewReviewer", fields: [reviewedByUserId], references: [id], onDelete: SetNull)
+
+  @@index([tenantId])
+  @@index([status])
+  @@map("knowledge_reviews")
+}
+
+model KnowledgeQaPair {
+  id             String                @id @default(cuid())
+  tenantId       String                @map("tenant_id")
+  documentId     String?               @map("document_id")
+  createdByUserId String?              @map("created_by_user_id")
+  question       String
+  answer         String                @db.Text
+  sensitivity    KnowledgeSensitivity
+  status         KnowledgeReviewStatus
+  createdAt      DateTime              @default(now()) @map("created_at")
+  updatedAt      DateTime              @updatedAt @map("updated_at")
+  tenant         Tenant                @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  document       KnowledgeDocument?    @relation(fields: [documentId], references: [id], onDelete: SetNull)
+  createdBy      User?                 @relation("KnowledgeQaPairAuthor", fields: [createdByUserId], references: [id], onDelete: SetNull)
+
+  @@index([tenantId])
+  @@map("knowledge_qa_pairs")
+}
+
+model SiteProject {
+  id              String       @id @default(cuid())
+  tenantId        String       @map("tenant_id")
+  createdByUserId String?      @map("created_by_user_id")
+  currentVersionId String?     @unique @map("current_version_id")
+  name            String
+  slug            String
+  market          String?
+  product         String?
+  style           String?
+  cta             String?
+  defaultLocale   LocaleCode   @map("default_locale")
+  status          SiteStatus
+  createdAt       DateTime     @default(now()) @map("created_at")
+  updatedAt       DateTime     @updatedAt @map("updated_at")
+  publishedAt     DateTime?    @map("published_at")
+  tenant          Tenant       @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  createdBy       User?        @relation("SiteProjectCreator", fields: [createdByUserId], references: [id], onDelete: SetNull)
+  currentVersion  SiteVersion? @relation("SiteProjectCurrentVersion", fields: [currentVersionId], references: [id], onDelete: SetNull)
+  pages           SitePage[]
+  locales         SiteLocale[]
+  versions        SiteVersion[] @relation("SiteProjectVersions")
+
+  @@unique([tenantId, slug])
+  @@index([tenantId])
+  @@map("site_projects")
+}
+
+model SitePage {
+  id            String      @id @default(cuid())
+  tenantId      String      @map("tenant_id")
+  siteProjectId String      @map("site_project_id")
+  pageType      String      @map("page_type")
+  title         String
+  slug          String
+  content       Json
+  isHomepage    Boolean     @default(false) @map("is_homepage")
+  createdAt     DateTime    @default(now()) @map("created_at")
+  updatedAt     DateTime    @updatedAt @map("updated_at")
+  tenant        Tenant      @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  siteProject   SiteProject @relation(fields: [siteProjectId], references: [id], onDelete: Cascade)
+
+  @@unique([siteProjectId, slug])
+  @@index([tenantId])
+  @@map("site_pages")
+}
+
+model SiteLocale {
+  id            String          @id @default(cuid())
+  tenantId      String          @map("tenant_id")
+  siteProjectId String          @map("site_project_id")
+  locale        LocaleCode
+  direction     LocaleDirection
+  urlPath       String          @map("url_path")
+  translatedContent Json        @map("translated_content")
+  seoTitle      String?         @map("seo_title")
+  seoDescription String?        @map("seo_description")
+  geoMetadata   Json?           @map("geo_metadata")
+  publishStatus PublishStatus   @map("publish_status")
+  publishedAt   DateTime?       @map("published_at")
+  createdAt     DateTime        @default(now()) @map("created_at")
+  updatedAt     DateTime        @updatedAt @map("updated_at")
+  tenant        Tenant          @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  siteProject   SiteProject     @relation(fields: [siteProjectId], references: [id], onDelete: Cascade)
+
+  @@unique([siteProjectId, locale])
+  @@index([tenantId])
+  @@map("site_locales")
+}
+
+model SiteVersion {
+  id             String      @id @default(cuid())
+  tenantId       String      @map("tenant_id")
+  siteProjectId  String      @map("site_project_id")
+  createdByUserId String?    @map("created_by_user_id")
+  versionNumber  Int         @map("version_number")
+  snapshot       Json
+  note           String?
+  createdAt      DateTime    @default(now()) @map("created_at")
+  updatedAt      DateTime    @updatedAt @map("updated_at")
+  tenant         Tenant      @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  siteProject    SiteProject @relation("SiteProjectVersions", fields: [siteProjectId], references: [id], onDelete: Cascade)
+  currentForProject SiteProject? @relation("SiteProjectCurrentVersion")
+  createdBy      User?       @relation("SiteVersionCreator", fields: [createdByUserId], references: [id], onDelete: SetNull)
+
+  @@unique([siteProjectId, versionNumber])
+  @@index([tenantId])
+  @@map("site_versions")
+}
+
+model Campaign {
+  id           String         @id @default(cuid())
+  tenantId     String         @map("tenant_id")
+  name         String
+  topic        String?
+  market       String?
+  status       CampaignStatus
+  budgetUsd    Decimal?       @map("budget_usd") @db.Decimal(12, 2)
+  createdAt    DateTime       @default(now()) @map("created_at")
+  updatedAt    DateTime       @updatedAt @map("updated_at")
+  tenant       Tenant         @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  contentPacks ContentPack[]
+  trackingLinks TrackingLink[]
+  clickEvents  ClickEvent[]
+  leads        Lead[]
+
+  @@index([tenantId])
+  @@map("campaigns")
+}
+
+model ContentPack {
+  id              String            @id @default(cuid())
+  tenantId        String            @map("tenant_id")
+  campaignId      String?           @map("campaign_id")
+  createdByUserId String?           @map("created_by_user_id")
+  title           String
+  topic           String
+  market          String?
+  locales         Json
+  status          ContentPackStatus
+  createdAt       DateTime          @default(now()) @map("created_at")
+  updatedAt       DateTime          @updatedAt @map("updated_at")
+  tenant          Tenant            @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  campaign        Campaign?         @relation(fields: [campaignId], references: [id], onDelete: SetNull)
+  createdBy       User?             @relation("ContentPackCreator", fields: [createdByUserId], references: [id], onDelete: SetNull)
+  items           ContentItem[]
+
+  @@index([tenantId])
+  @@map("content_packs")
+}
+
+model ContentItem {
+  id              String        @id @default(cuid())
+  tenantId        String        @map("tenant_id")
+  contentPackId   String        @map("content_pack_id")
+  ownerUserId     String?       @map("owner_user_id")
+  platform        Platform
+  locale          LocaleCode
+  mediaType       MediaType     @map("media_type")
+  title           String?
+  body            String?       @db.Text
+  spec            Json
+  publishStatus   PublishStatus @map("publish_status")
+  plannedAt       DateTime?     @map("planned_at")
+  publishedAt     DateTime?     @map("published_at")
+  createdAt       DateTime      @default(now()) @map("created_at")
+  updatedAt       DateTime      @updatedAt @map("updated_at")
+  tenant          Tenant        @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  contentPack     ContentPack   @relation(fields: [contentPackId], references: [id], onDelete: Cascade)
+  owner           User?         @relation("ContentItemOwner", fields: [ownerUserId], references: [id], onDelete: SetNull)
+  trackingLink    TrackingLink?
+  clickEvents     ClickEvent[]
+  leads           Lead[]
+
+  @@index([tenantId])
+  @@index([platform, publishStatus])
+  @@map("content_items")
+}
+
+model TrackingLink {
+  id            String      @id @default(cuid())
+  tenantId      String      @map("tenant_id")
+  campaignId    String?     @map("campaign_id")
+  contentItemId String      @unique @map("content_item_id")
+  platform      Platform
+  slug          String      @unique
+  targetUrl     String      @map("target_url")
+  utmSource     String      @map("utm_source")
+  utmMedium     String      @map("utm_medium")
+  utmCampaign   String      @map("utm_campaign")
+  utmContent    String?     @map("utm_content")
+  botFilterEnabled Boolean  @default(true) @map("bot_filter_enabled")
+  createdAt     DateTime    @default(now()) @map("created_at")
+  updatedAt     DateTime    @updatedAt @map("updated_at")
+  tenant        Tenant      @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  campaign      Campaign?   @relation(fields: [campaignId], references: [id], onDelete: SetNull)
+  contentItem   ContentItem @relation(fields: [contentItemId], references: [id], onDelete: Cascade)
+  clickEvents   ClickEvent[]
+  leads         Lead[]
+
+  @@index([tenantId])
+  @@map("tracking_links")
+}
+
+model ClickEvent {
+  id            String    @id @default(cuid())
+  tenantId      String    @map("tenant_id")
+  trackingLinkId String   @map("tracking_link_id")
+  campaignId    String?   @map("campaign_id")
+  contentItemId String?   @map("content_item_id")
+  platform      Platform
+  visitorIp     String?   @map("visitor_ip")
+  userAgent     String?   @map("user_agent")
+  referer       String?
+  queryString   String?   @map("query_string")
+  isBot         Boolean   @default(false) @map("is_bot")
+  occurredAt    DateTime  @default(now()) @map("occurred_at")
+  tenant        Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  trackingLink  TrackingLink @relation(fields: [trackingLinkId], references: [id], onDelete: Cascade)
+  campaign      Campaign? @relation(fields: [campaignId], references: [id], onDelete: SetNull)
+  contentItem   ContentItem? @relation(fields: [contentItemId], references: [id], onDelete: SetNull)
+
+  @@index([tenantId])
+  @@map("click_events")
+}
+
+model Contact {
+  id              String     @id @default(cuid())
+  tenantId        String     @map("tenant_id")
+  companyName     String?    @map("company_name")
+  name            String?
+  email           String?
+  phone           String?
+  whatsapp        String?
+  country         String?
+  preferredLocale LocaleCode? @map("preferred_locale")
+  notes           String?    @db.Text
+  createdAt       DateTime   @default(now()) @map("created_at")
+  updatedAt       DateTime   @updatedAt @map("updated_at")
+  tenant          Tenant     @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  leads           Lead[]
+
+  @@index([tenantId])
+  @@map("contacts")
+}
+
+model Lead {
+  id                  String      @id @default(cuid())
+  tenantId            String      @map("tenant_id")
+  contactId           String?     @map("contact_id")
+  ownerUserId         String?     @map("owner_user_id")
+  campaignId          String?     @map("campaign_id")
+  sourceContentItemId String?     @map("source_content_item_id")
+  trackingLinkId      String?     @map("tracking_link_id")
+  companyName         String?     @map("company_name")
+  country             String?
+  preferredLocale     LocaleCode? @map("preferred_locale")
+  status              LeadStatus
+  score               LeadScore?
+  scoreReason         String?     @map("score_reason")
+  dedupeHash          String?     @map("dedupe_hash")
+  followUpDueAt       DateTime?   @map("follow_up_due_at")
+  firstSeenAt         DateTime    @default(now()) @map("first_seen_at")
+  lastContactAt       DateTime?   @map("last_contact_at")
+  formPayload         Json?       @map("form_payload")
+  createdAt           DateTime    @default(now()) @map("created_at")
+  updatedAt           DateTime    @updatedAt @map("updated_at")
+  tenant              Tenant      @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  contact             Contact?    @relation(fields: [contactId], references: [id], onDelete: SetNull)
+  owner               User?       @relation("LeadOwner", fields: [ownerUserId], references: [id], onDelete: SetNull)
+  campaign            Campaign?   @relation(fields: [campaignId], references: [id], onDelete: SetNull)
+  sourceContentItem   ContentItem? @relation(fields: [sourceContentItemId], references: [id], onDelete: SetNull)
+  trackingLink        TrackingLink? @relation(fields: [trackingLinkId], references: [id], onDelete: SetNull)
+  inquiries           Inquiry[]
+  inboundEmails       InboundEmail[]
+  opportunities       Opportunity[]
+  activities          CrmActivity[]
+
+  @@index([tenantId])
+  @@index([ownerUserId])
+  @@map("leads")
+}
+
+model Inquiry {
+  id             String            @id @default(cuid())
+  tenantId       String            @map("tenant_id")
+  leadId         String            @map("lead_id")
+  inboundEmailId String?           @unique @map("inbound_email_id")
+  sourceType     InquirySourceType @map("source_type")
+  subject        String?
+  body           String            @db.Text
+  fromEmail      String?           @map("from_email")
+  fromName       String?           @map("from_name")
+  rawPayload     Json?             @map("raw_payload")
+  createdAt      DateTime          @default(now()) @map("created_at")
+  updatedAt      DateTime          @updatedAt @map("updated_at")
+  tenant         Tenant            @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  lead           Lead              @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  inboundEmail   InboundEmail?     @relation(fields: [inboundEmailId], references: [id], onDelete: SetNull)
+  replies        Reply[]
+
+  @@index([tenantId])
+  @@map("inquiries")
+}
+
+model InboundEmail {
+  id              String             @id @default(cuid())
+  tenantId        String             @map("tenant_id")
+  leadId          String?            @map("lead_id")
+  provider        String
+  externalMessageId String?          @map("external_message_id")
+  idempotencyKey  String?            @map("idempotency_key")
+  dedupeHash      String?            @map("dedupe_hash")
+  fromEmail       String?            @map("from_email")
+  fromName        String?            @map("from_name")
+  subject         String?
+  body            String?            @db.Text
+  attachments     Json?
+  status          InboundEmailStatus
+  createdAt       DateTime           @default(now()) @map("created_at")
+  updatedAt       DateTime           @updatedAt @map("updated_at")
+  tenant          Tenant             @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  lead            Lead?              @relation(fields: [leadId], references: [id], onDelete: SetNull)
+  inquiry         Inquiry?
+
+  @@unique([tenantId, idempotencyKey])
+  @@index([tenantId])
+  @@map("inbound_emails")
+}
+
+model Opportunity {
+  id             String           @id @default(cuid())
+  tenantId       String           @map("tenant_id")
+  leadId         String           @map("lead_id")
+  ownerUserId    String?          @map("owner_user_id")
+  name           String
+  stage          OpportunityStage
+  valueAmount    Decimal?         @map("value_amount") @db.Decimal(12, 2)
+  currency       String?          @default("USD")
+  followUpDueAt  DateTime?        @map("follow_up_due_at")
+  closedAt       DateTime?        @map("closed_at")
+  createdAt      DateTime         @default(now()) @map("created_at")
+  updatedAt      DateTime         @updatedAt @map("updated_at")
+  tenant         Tenant           @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  lead           Lead             @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  owner          User?            @relation("OpportunityOwner", fields: [ownerUserId], references: [id], onDelete: SetNull)
+  activities     CrmActivity[]
+
+  @@index([tenantId])
+  @@map("opportunities")
+}
+
+model CrmActivity {
+  id             String           @id @default(cuid())
+  tenantId       String           @map("tenant_id")
+  leadId         String?          @map("lead_id")
+  opportunityId  String?          @map("opportunity_id")
+  actorUserId    String?          @map("actor_user_id")
+  type           CrmActivityType
+  body           String           @db.Text
+  metadata       Json?
+  createdAt      DateTime         @default(now()) @map("created_at")
+  tenant         Tenant           @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  lead           Lead?            @relation(fields: [leadId], references: [id], onDelete: SetNull)
+  opportunity    Opportunity?     @relation(fields: [opportunityId], references: [id], onDelete: SetNull)
+  actor          User?            @relation("CrmActivityActor", fields: [actorUserId], references: [id], onDelete: SetNull)
+
+  @@index([tenantId])
+  @@map("crm_activities")
+}
+
+model Reply {
+  id                String        @id @default(cuid())
+  tenantId          String        @map("tenant_id")
+  inquiryId         String        @map("inquiry_id")
+  createdByUserId   String?       @map("created_by_user_id")
+  approvedByUserId  String?       @map("approved_by_user_id")
+  modelInvocationId String?       @unique @map("model_invocation_id")
+  status            ReplyStatus
+  route             ModelRoute
+  draftText         String        @map("draft_text") @db.Text
+  finalText         String?       @map("final_text") @db.Text
+  citations         Json?
+  sentAt            DateTime?     @map("sent_at")
+  createdAt         DateTime      @default(now()) @map("created_at")
+  updatedAt         DateTime      @updatedAt @map("updated_at")
+  tenant            Tenant        @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  inquiry           Inquiry       @relation(fields: [inquiryId], references: [id], onDelete: Cascade)
+  createdBy         User?         @relation("ReplyCreatedBy", fields: [createdByUserId], references: [id], onDelete: SetNull)
+  approvedBy        User?         @relation("ReplyApprovedBy", fields: [approvedByUserId], references: [id], onDelete: SetNull)
+  modelInvocation   ModelInvocation? @relation(fields: [modelInvocationId], references: [id], onDelete: SetNull)
+
+  @@index([tenantId])
+  @@map("replies")
+}
+
+model HitlTask {
+  id               String      @id @default(cuid())
+  tenantId         String      @map("tenant_id")
+  requestedByUserId String?    @map("requested_by_user_id")
+  assigneeUserId   String?     @map("assignee_user_id")
+  approvedByUserId String?     @map("approved_by_user_id")
+  rejectedByUserId String?     @map("rejected_by_user_id")
+  type             HitlTaskType
+  status           HitlStatus
+  entityType       String      @map("entity_type")
+  entityId         String      @map("entity_id")
+  payload          Json
+  reason           String?
+  expiresAt        DateTime?   @map("expires_at")
+  resolvedAt       DateTime?   @map("resolved_at")
+  createdAt        DateTime    @default(now()) @map("created_at")
+  updatedAt        DateTime    @updatedAt @map("updated_at")
+  tenant           Tenant      @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  requestedBy      User?       @relation("HitlRequestedBy", fields: [requestedByUserId], references: [id], onDelete: SetNull)
+  assignee         User?       @relation("HitlAssignedTo", fields: [assigneeUserId], references: [id], onDelete: SetNull)
+  approvedBy       User?       @relation("HitlApprovedBy", fields: [approvedByUserId], references: [id], onDelete: SetNull)
+  rejectedBy       User?       @relation("HitlRejectedBy", fields: [rejectedByUserId], references: [id], onDelete: SetNull)
+
+  @@index([tenantId])
+  @@index([status, type])
+  @@map("hitl_tasks")
+}
+
+model Notification {
+  id         String             @id @default(cuid())
+  tenantId   String             @map("tenant_id")
+  userId     String             @map("user_id")
+  type       NotificationType
+  status     NotificationStatus @default(UNREAD)
+  title      String
+  body       String
+  linkUrl    String?            @map("link_url")
+  payload    Json?
+  readAt     DateTime?          @map("read_at")
+  createdAt  DateTime           @default(now()) @map("created_at")
+  tenant     Tenant             @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  user       User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+  @@index([userId, status])
+  @@map("notifications")
+}
+
+model DataRequest {
+  id                String            @id @default(cuid())
+  tenantId          String            @map("tenant_id")
+  requestedByUserId String            @map("requested_by_user_id")
+  type              DataRequestType
+  status            DataRequestStatus
+  scope             Json?
+  createdAt         DateTime          @default(now()) @map("created_at")
+  updatedAt         DateTime          @updatedAt @map("updated_at")
+  completedAt       DateTime?         @map("completed_at")
+  tenant            Tenant            @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  requestedBy       User              @relation(fields: [requestedByUserId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+  @@map("data_requests")
+}

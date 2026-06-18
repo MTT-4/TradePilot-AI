@@ -10,7 +10,13 @@ const envSchema = z.object({
   S3_ACCESS_KEY: z.string().min(1),
   S3_SECRET_KEY: z.string().min(1),
   AUTH_SECRET: z.string().min(1),
+  OPENAI_BASE_URL: z.string().url().default("https://api.openai.com/v1"),
   OPENAI_API_KEY: z.string().min(1),
+  OPENAI_MODEL: z.string().min(1).default("gpt-4.1-mini"),
+  GOOGLE_TRANSLATE_BASE_URL: z
+    .string()
+    .url()
+    .default("https://translation.googleapis.com/language/translate/v2"),
   GOOGLE_TRANSLATE_KEY: z.string().min(1),
   LOCAL_QWEN_BASE_URL: z.string().url(),
   LOCAL_QWEN_MODEL: z.string().min(1),

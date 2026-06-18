@@ -11,7 +11,11 @@ const validEnv = {
   S3_ACCESS_KEY: "tradepilot",
   S3_SECRET_KEY: "tradepilot-local-secret",
   AUTH_SECRET: "super-secret",
+  OPENAI_BASE_URL: "https://api.openai.com/v1",
   OPENAI_API_KEY: "openai-placeholder",
+  OPENAI_MODEL: "gpt-4.1-mini",
+  GOOGLE_TRANSLATE_BASE_URL:
+    "https://translation.googleapis.com/language/translate/v2",
   GOOGLE_TRANSLATE_KEY: "google-placeholder",
   LOCAL_QWEN_BASE_URL: "http://localhost:8080/v1",
   LOCAL_QWEN_MODEL: "qwen2.5-vl-32b-instruct",

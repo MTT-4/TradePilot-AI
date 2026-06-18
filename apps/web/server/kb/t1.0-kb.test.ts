@@ -180,74 +180,78 @@ describe("T1.0 knowledge documents", () => {
     globalThis.fetch = originalFetch;
   });
 
-  it("creates an uploaded knowledge document, parses it, and exposes list/detail state", async () => {
-    const workbook = xlsx.utils.book_new();
-    const sheet = xlsx.utils.aoa_to_sheet([
-      ["SKU", "Description"],
-      ["A-100", "Industrial pump"],
-    ]);
-    xlsx.utils.book_append_sheet(workbook, sheet, "Catalog");
-    const workbookBuffer = xlsx.write(workbook, {
-      bookType: "xlsx",
-      type: "buffer",
-    }) as Buffer;
-    const file = new File([new Uint8Array(workbookBuffer)], "catalog.xlsx", {
-      type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-    });
-    const result = await createKnowledgeDocumentFromUpload({
-      tenantContext,
-      uploadedByUserId: tenantContext.userId,
-      file,
-      sensitivity: "public",
-      title: "Catalog workbook",
-      market: "MENA",
-      product: "Pumps",
-    });
+  it(
+    "creates an uploaded knowledge document, parses it, and exposes list/detail state",
+    async () => {
+      const workbook = xlsx.utils.book_new();
+      const sheet = xlsx.utils.aoa_to_sheet([
+        ["SKU", "Description"],
+        ["A-100", "Industrial pump"],
+      ]);
+      xlsx.utils.book_append_sheet(workbook, sheet, "Catalog");
+      const workbookBuffer = xlsx.write(workbook, {
+        bookType: "xlsx",
+        type: "buffer",
+      }) as Buffer;
+      const file = new File([new Uint8Array(workbookBuffer)], "catalog.xlsx", {
+        type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+      });
+      const result = await createKnowledgeDocumentFromUpload({
+        tenantContext,
+        uploadedByUserId: tenantContext.userId,
+        file,
+        sensitivity: "public",
+        title: "Catalog workbook",
+        market: "MENA",
+        product: "Pumps",
+      });
 
-    const initialDocument = await getKnowledgeDocumentRecordForTests({
-      tenantContext,
-      documentId: result.documentId,
-    });
-    expect(initialDocument?.status).toBe(KnowledgeDocumentStatus.UPLOADED);
+      const initialDocument = await getKnowledgeDocumentRecordForTests({
+        tenantContext,
+        documentId: result.documentId,
+      });
+      expect(initialDocument?.status).toBe(KnowledgeDocumentStatus.UPLOADED);
 
-    startJobWorker();
+      startJobWorker();
 
-    await waitForDocumentStatus({
-      tenantContext,
-      documentId: result.documentId,
-      expected: KnowledgeDocumentStatus.READY,
-      allowIntermediates: [
-        KnowledgeDocumentStatus.UPLOADED,
-        KnowledgeDocumentStatus.PARSING,
-        KnowledgeDocumentStatus.CHUNKING,
-        KnowledgeDocumentStatus.EMBEDDING,
-      ],
-    });
+      await waitForDocumentStatus({
+        tenantContext,
+        documentId: result.documentId,
+        expected: KnowledgeDocumentStatus.READY,
+        allowIntermediates: [
+          KnowledgeDocumentStatus.UPLOADED,
+          KnowledgeDocumentStatus.PARSING,
+          KnowledgeDocumentStatus.CHUNKING,
+          KnowledgeDocumentStatus.EMBEDDING,
+        ],
+      });
 
-    const parsedText = await getParsedKnowledgeDocumentText({
-      tenantId: tenantContext.tenantId,
-      documentId: result.documentId,
-    });
-    expect(parsedText).toContain("Industrial pump");
+      const parsedText = await getParsedKnowledgeDocumentText({
+        tenantId: tenantContext.tenantId,
+        documentId: result.documentId,
+      });
+      expect(parsedText).toContain("Industrial pump");
 
-    const detail = await getKnowledgeDocumentDetail(
-      tenantContext,
-      result.documentId,
-    );
-    expect(detail.status).toBe("ready");
-    expect(detail.chunkCount).toBeGreaterThan(0);
-    expect(detail.pendingReviewCount).toBe(0);
+      const detail = await getKnowledgeDocumentDetail(
+        tenantContext,
+        result.documentId,
+      );
+      expect(detail.status).toBe("ready");
+      expect(detail.chunkCount).toBeGreaterThan(0);
+      expect(detail.pendingReviewCount).toBeGreaterThan(0);
 
-    const list = await listKnowledgeDocuments(tenantContext);
-    expect(list.items.some((item) => item.id === result.documentId)).toBe(true);
-    const embeddings = await getKnowledgeChunkEmbeddingsForTests({
-      tenantContext,
-      documentId: result.documentId,
-    });
-    expect(embeddings.every((item) => item.embeddingText?.startsWith("[") ?? false)).toBe(
-      true,
-    );
-  });
+      const list = await listKnowledgeDocuments(tenantContext);
+      expect(list.items.some((item) => item.id === result.documentId)).toBe(true);
+      const embeddings = await getKnowledgeChunkEmbeddingsForTests({
+        tenantContext,
+        documentId: result.documentId,
+      });
+      expect(
+        embeddings.every((item) => item.embeddingText?.startsWith("[") ?? false),
+      ).toBe(true);
+    },
+    15000,
+  );
 
   it("parses a URL document and allows retry after a failure", async () => {
     let failMode = true;

@@ -5,6 +5,7 @@ import {
   JobType,
   KnowledgeDocumentStatus,
   KnowledgeSensitivity,
+  KnowledgeReviewStatus,
   LocaleCode,
   ModelTaskType,
   MembershipRole,
@@ -174,6 +175,10 @@ function buildNoEvidenceResult() {
     message:
       "No grounded knowledge found for this tenant and query. Add or review knowledge documents before generating content.",
   };
+}
+
+function toApiReviewStatus(value: KnowledgeReviewStatus) {
+  return value.toLowerCase();
 }
 
 async function createKnowledgeDocumentRecord(params: {
@@ -685,6 +690,39 @@ export async function runParseDocumentJob(params: {
   await tenantPrisma.knowledgeChunk.createMany({
     data: chunks,
   });
+  const createdChunks = await tenantPrisma.knowledgeChunk.findMany({
+    where: {
+      documentId: document.id,
+    },
+    orderBy: {
+      chunkIndex: "asc",
+    },
+    select: {
+      id: true,
+      text: true,
+      sourceCitation: true,
+      sensitivity: true,
+    },
+  });
+
+  await tenantPrisma.knowledgeReview.deleteMany({
+    where: {
+      documentId: document.id,
+      status: KnowledgeReviewStatus.PENDING,
+    },
+  });
+  await tenantPrisma.knowledgeReview.createMany({
+    data: createdChunks.map((chunk, index) => ({
+      tenantId: params.tenantId,
+      documentId: document.id,
+      chunkId: chunk.id,
+      question: `Review extracted knowledge #${index + 1}`,
+      answer: chunk.text,
+      sourceCitation: chunk.sourceCitation,
+      sensitivity: chunk.sensitivity,
+      status: KnowledgeReviewStatus.PENDING,
+    })),
+  });
   await params.reportProgress(95);
 
   await tenantPrisma.knowledgeDocument.update({
@@ -866,6 +904,12 @@ export async function markKnowledgeDocumentParseFailed(params: {
   await tenantPrisma.knowledgeChunk.deleteMany({
     where: {
       documentId: params.documentId,
+    },
+  });
+  await tenantPrisma.knowledgeReview.deleteMany({
+    where: {
+      documentId: params.documentId,
+      status: KnowledgeReviewStatus.PENDING,
     },
   });
 }
@@ -1258,6 +1302,260 @@ export async function hybridSearchKnowledgeChunks(params: {
       keywordScore: Number(item.keywordScore.toFixed(4)),
     })),
     message: null,
+  };
+}
+
+export async function listKnowledgeReviews(params: {
+  tenantContext: TenantContext;
+  status?: "pending" | "approved" | "corrected";
+}) {
+  const tenantPrisma = getTenantPrisma(params.tenantContext);
+  const where =
+    params.status
+      ? {
+          status: params.status.toUpperCase() as KnowledgeReviewStatus,
+        }
+      : undefined;
+  const [reviews, documentCount, reviewCount, approvedCount, internalOnlyCount, locales] =
+    await Promise.all([
+      tenantPrisma.knowledgeReview.findMany({
+        where,
+        orderBy: [
+          {
+            status: "asc",
+          },
+          {
+            createdAt: "asc",
+          },
+        ],
+        select: {
+          id: true,
+          question: true,
+          answer: true,
+          correctedText: true,
+          sourceCitation: true,
+          sensitivity: true,
+          status: true,
+          createdAt: true,
+          updatedAt: true,
+          document: {
+            select: {
+              id: true,
+              title: true,
+              locale: true,
+              sourceLabel: true,
+              sourceType: true,
+            },
+          },
+          chunk: {
+            select: {
+              id: true,
+              chunkIndex: true,
+              text: true,
+            },
+          },
+          reviewedBy: {
+            select: {
+              id: true,
+              name: true,
+              email: true,
+            },
+          },
+        },
+      }),
+      tenantPrisma.knowledgeDocument.count(),
+      Promise.all([
+        tenantPrisma.knowledgeReview.count(),
+        tenantPrisma.knowledgeQaPair.count(),
+      ]).then(([reviewsTotal, qaPairsTotal]) => reviewsTotal + qaPairsTotal),
+      Promise.all([
+        tenantPrisma.knowledgeReview.count({
+          where: {
+            status: {
+              in: [
+                KnowledgeReviewStatus.APPROVED,
+                KnowledgeReviewStatus.CORRECTED,
+              ],
+            },
+          },
+        }),
+        tenantPrisma.knowledgeQaPair.count({
+          where: {
+            status: {
+              in: [
+                KnowledgeReviewStatus.APPROVED,
+                KnowledgeReviewStatus.CORRECTED,
+              ],
+            },
+          },
+        }),
+      ]).then(([reviewsApproved, qaPairsApproved]) => reviewsApproved + qaPairsApproved),
+      Promise.all([
+        tenantPrisma.knowledgeReview.count({
+          where: {
+            sensitivity: KnowledgeSensitivity.INTERNAL_ONLY,
+          },
+        }),
+        tenantPrisma.knowledgeQaPair.count({
+          where: {
+            sensitivity: KnowledgeSensitivity.INTERNAL_ONLY,
+          },
+        }),
+      ]).then(([reviewsInternal, qaPairsInternal]) => reviewsInternal + qaPairsInternal),
+      tenantPrisma.knowledgeDocument.findMany({
+        distinct: ["locale"],
+        select: {
+          locale: true,
+        },
+      }),
+    ]);
+
+  return {
+    summary: {
+      documentsCount: documentCount,
+      cardsCount: reviewCount,
+      approvedCount,
+      languagesCount: locales.length,
+      internalOnlyCount,
+    },
+    items: reviews.map((review) => ({
+      id: review.id,
+      question: review.question ?? `Review card ${review.id}`,
+      answer: review.correctedText ?? review.answer ?? review.chunk?.text ?? "",
+      rawAnswer: review.answer ?? review.chunk?.text ?? "",
+      correctedText: review.correctedText,
+      sourceCitation: review.sourceCitation,
+      sensitivity: toApiChunkSensitivity(review.sensitivity),
+      status: toApiReviewStatus(review.status),
+      createdAt: review.createdAt,
+      updatedAt: review.updatedAt,
+      document: {
+        id: review.document.id,
+        title: review.document.title,
+        locale: review.document.locale.toLowerCase(),
+        sourceLabel: review.document.sourceLabel,
+        sourceType: review.document.sourceType.toLowerCase(),
+      },
+      chunk: review.chunk
+        ? {
+            id: review.chunk.id,
+            chunkIndex: review.chunk.chunkIndex,
+            text: review.chunk.text,
+          }
+        : null,
+      reviewedBy: review.reviewedBy,
+    })),
+  };
+}
+
+export async function reviewKnowledgeCard(params: {
+  tenantContext: TenantContext;
+  reviewId: string;
+  reviewedByUserId: string;
+  action: "approve" | "correct";
+  correctedText?: string | null;
+  sensitivity?: "public" | "internal_only" | null;
+}) {
+  const tenantPrisma = getTenantPrisma(params.tenantContext);
+  const review = await tenantPrisma.knowledgeReview.findUnique({
+    where: {
+      id: params.reviewId,
+    },
+    select: {
+      id: true,
+      documentId: true,
+      chunkId: true,
+      answer: true,
+      question: true,
+      sensitivity: true,
+      status: true,
+      sourceCitation: true,
+    },
+  });
+
+  if (!review) {
+    throw new ApiError(404, "NOT_FOUND", "Knowledge review not found.");
+  }
+
+  const nextSensitivity =
+    parseKnowledgeSensitivity(params.sensitivity) ?? review.sensitivity;
+
+  if (params.action === "correct" && !params.correctedText?.trim()) {
+    throw new ApiError(
+      400,
+      "VALIDATION",
+      "correctedText is required when action is correct.",
+    );
+  }
+
+  const nextStatus =
+    params.action === "approve"
+      ? KnowledgeReviewStatus.APPROVED
+      : KnowledgeReviewStatus.CORRECTED;
+  const nextText = params.correctedText?.trim() ?? review.answer ?? "";
+
+  const updated = await tenantPrisma.$transaction(async (tx) => {
+    const updatedReview = await tx.knowledgeReview.update({
+      where: {
+        id: review.id,
+      },
+      data: {
+        reviewedByUserId: params.reviewedByUserId,
+        status: nextStatus,
+        correctedText:
+          params.action === "correct" ? nextText : null,
+        sensitivity: nextSensitivity,
+        answer: params.action === "correct" ? nextText : review.answer,
+      },
+      select: {
+        id: true,
+        status: true,
+        sensitivity: true,
+        correctedText: true,
+      },
+    });
+
+    if (review.chunkId) {
+      await tx.knowledgeChunk.update({
+        where: {
+          id: review.chunkId,
+        },
+        data: {
+          text: params.action === "correct" ? nextText : undefined,
+          sensitivity: nextSensitivity,
+        },
+      });
+    }
+
+    await tx.auditLog.create({
+      data: {
+        tenantId: params.tenantContext.tenantId,
+        actorUserId: params.reviewedByUserId,
+        action:
+          params.action === "approve"
+            ? "knowledge_review_approved"
+            : "knowledge_review_corrected",
+        entityType: "knowledge_review",
+        entityId: review.id,
+        metadata: {
+          reviewId: review.id,
+          documentId: review.documentId,
+          chunkId: review.chunkId,
+          sensitivity: nextSensitivity.toLowerCase(),
+          status: nextStatus.toLowerCase(),
+          sourceCitation: review.sourceCitation,
+        },
+      },
+    });
+
+    return updatedReview;
+  });
+
+  return {
+    reviewId: updated.id,
+    status: updated.status.toLowerCase(),
+    sensitivity: updated.sensitivity.toLowerCase(),
+    correctedText: updated.correctedText,
   };
 }
 

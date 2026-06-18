@@ -1764,7 +1764,7 @@ export async function rollbackSiteProject(params: {
   const snapshot = getSnapshotFromUnknown(version.snapshot, brief);
   const draft = buildDraftFromSnapshot(snapshot);
 
-  await persistSiteDraft({
+  const rollbackVersion = await persistSiteDraft({
     tenantContext: params.tenantContext,
     siteProjectId: params.siteId,
     createdByUserId: params.requestedByUserId,
@@ -1774,6 +1774,15 @@ export async function rollbackSiteProject(params: {
     note: `Rollback from v${version.versionNumber}`,
     auditAction: "site_draft_updated",
   });
+
+  if (detail.project.publishedAt) {
+    await publishSiteVersion({
+      tenantContext: params.tenantContext,
+      siteId: params.siteId,
+      versionId: rollbackVersion.id,
+      approvedByUserId: params.requestedByUserId,
+    });
+  }
 
   await createAuditLog({
     tenantId: params.tenantContext.tenantId,

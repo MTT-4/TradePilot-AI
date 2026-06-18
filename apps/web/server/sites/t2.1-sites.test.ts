@@ -715,6 +715,7 @@ describe("T2.1 site generation", () => {
         versionId: published.version!.id,
         requestedByUserId: tenantContext.userId,
       });
+      expect(rolledBack.project.status).toBe("published");
       expect(rolledBack.version?.versionNumber).toBeGreaterThan(edited.version!.versionNumber);
       expect(
         rolledBack.locales.every((locale) =>
@@ -723,6 +724,17 @@ describe("T2.1 site generation", () => {
               sections: Array<{ id: string }>;
             }
           ).sections.every((section) => section.id !== "trust"),
+        ),
+      ).toBe(true);
+
+      const rolledBackLivePage = await getPublicSiteLocalePageData({
+        slug: rolledBack.project.slug,
+        locale: "en",
+      });
+      expect(rolledBackLivePage.project.status).toBe("published");
+      expect(
+        rolledBackLivePage.locale.translatedContent.sections.every(
+          (section) => section.id !== "trust",
         ),
       ).toBe(true);
     },

@@ -32,7 +32,7 @@ runtime/models/
 
 # Local data and backups
 backups/
-storage/
+/storage/
 
 # Docker/local services
 .docker/

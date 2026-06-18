@@ -9,6 +9,7 @@
   ],
   "scripts": {
     "dev": "dotenv -e .env -- npm --workspace @tradepilot/web run dev",
+    "worker:jobs": "dotenv -e .env -- npm --workspace @tradepilot/web run worker:jobs",
     "build": "dotenv -e .env -- npm --workspace @tradepilot/web run build",
     "start": "dotenv -e .env -- npm --workspace @tradepilot/web run start",
     "lint": "turbo run lint --filter=@tradepilot/web",

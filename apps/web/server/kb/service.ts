@@ -110,6 +110,72 @@ function serializeVector(values: number[]) {
   return `[${values.join(",")}]`;
 }
 
+function normalizeQueryTokens(query: string) {
+  const stopwords = new Set([
+    "the",
+    "and",
+    "for",
+    "with",
+    "from",
+    "into",
+    "onto",
+    "that",
+    "this",
+    "only",
+    "about",
+    "after",
+    "before",
+  ]);
+
+  return Array.from(
+    new Set(
+      query
+        .toLowerCase()
+        .split(/[^a-z0-9\u4e00-\u9fff]+/u)
+        .map((token) => token.trim())
+        .filter((token) => token.length >= 3 && !stopwords.has(token)),
+    ),
+  ).slice(0, 8);
+}
+
+function computeKeywordScore(params: {
+  queryTokens: string[];
+  text: string;
+  sourceCitation?: string | null;
+  product?: string | null;
+  market?: string | null;
+}) {
+  if (params.queryTokens.length === 0) {
+    return 0;
+  }
+
+  const haystack = [
+    params.text,
+    params.sourceCitation ?? "",
+    params.product ?? "",
+    params.market ?? "",
+  ]
+    .join(" ")
+    .toLowerCase();
+  const matchedTokens = params.queryTokens.filter((token) =>
+    haystack.includes(token),
+  ).length;
+
+  return matchedTokens / params.queryTokens.length;
+}
+
+function toApiChunkSensitivity(value: KnowledgeSensitivity) {
+  return value.toLowerCase();
+}
+
+function buildNoEvidenceResult() {
+  return {
+    items: [],
+    message:
+      "No grounded knowledge found for this tenant and query. Add or review knowledge documents before generating content.",
+  };
+}
+
 async function createKnowledgeDocumentRecord(params: {
   tenantContext: TenantContext;
   uploadedByUserId: string;
@@ -995,6 +1061,204 @@ export async function semanticSearchKnowledgeChunks(params: {
       score: number;
     }>
   >(sqlParts.join("\n"), ...args);
+}
+
+export async function hybridSearchKnowledgeChunks(params: {
+  tenantContext: TenantContext;
+  userId?: string;
+  query: string;
+  limit?: number;
+  allowInternalOnly?: boolean;
+  product?: string | null;
+  market?: string | null;
+  fetchImpl?: typeof fetch;
+}) {
+  const normalizedQuery = params.query.trim();
+
+  if (!normalizedQuery) {
+    throw new ApiError(400, "VALIDATION", "Query must not be empty.");
+  }
+
+  const queryTokens = normalizeQueryTokens(normalizedQuery);
+  const semanticResults = await semanticSearchKnowledgeChunks({
+    ...params,
+    query: normalizedQuery,
+    limit: Math.max((params.limit ?? 5) * 3, 10),
+  });
+  const tenantPrisma = getTenantPrisma(params.tenantContext);
+  const sqlParts = [
+    `
+      SELECT "id",
+             "tenant_id" AS "tenantId",
+             "document_id" AS "documentId",
+             "chunk_index" AS "chunkIndex",
+             "namespace",
+             "text",
+             "source_citation" AS "sourceCitation",
+             "locale",
+             "product",
+             "market",
+             "sensitivity",
+             "metadata"
+      FROM "knowledge_chunks"
+      WHERE "tenant_id" = $1
+    `,
+  ];
+  const args: Array<string | number> = [params.tenantContext.tenantId];
+  let parameterIndex = 2;
+
+  if (!params.allowInternalOnly) {
+    sqlParts.push(`AND "sensitivity" = 'public'`);
+  }
+
+  if (params.product) {
+    sqlParts.push(`AND "product" = $${parameterIndex}`);
+    args.push(params.product);
+    parameterIndex += 1;
+  }
+
+  if (params.market) {
+    sqlParts.push(`AND "market" = $${parameterIndex}`);
+    args.push(params.market);
+    parameterIndex += 1;
+  }
+
+  if (queryTokens.length > 0) {
+    const tokenConditions = queryTokens.map((token) => {
+      const parameter = `$${parameterIndex}`;
+      args.push(`%${token}%`);
+      parameterIndex += 1;
+
+      return `(
+        LOWER("text") LIKE ${parameter}
+        OR LOWER(COALESCE("source_citation", '')) LIKE ${parameter}
+        OR LOWER(COALESCE("product", '')) LIKE ${parameter}
+        OR LOWER(COALESCE("market", '')) LIKE ${parameter}
+      )`;
+    });
+
+    sqlParts.push(`AND (${tokenConditions.join(" OR ")})`);
+  } else {
+    sqlParts.push(`AND FALSE`);
+  }
+
+  sqlParts.push(`LIMIT $${parameterIndex}`);
+  args.push(Math.max((params.limit ?? 5) * 3, 10));
+
+  const keywordResults = await tenantPrisma.$queryRawUnsafe<
+    Array<{
+      id: string;
+      tenantId: string;
+      documentId: string;
+      chunkIndex: number;
+      namespace: string;
+      text: string;
+      sourceCitation: string | null;
+      locale: LocaleCode;
+      product: string | null;
+      market: string | null;
+      sensitivity: KnowledgeSensitivity;
+      metadata: unknown;
+    }>
+  >(sqlParts.join("\n"), ...args);
+
+  const merged = new Map<
+    string,
+    {
+      id: string;
+      tenantId: string;
+      documentId: string;
+      chunkIndex: number;
+      namespace: string;
+      text: string;
+      sourceCitation: string | null;
+      locale: LocaleCode;
+      product: string | null;
+      market: string | null;
+      sensitivity: KnowledgeSensitivity;
+      metadata: unknown;
+      semanticScore: number;
+      keywordScore: number;
+      score: number;
+    }
+  >();
+
+  for (const result of semanticResults) {
+    const keywordScore = computeKeywordScore({
+      queryTokens,
+      text: result.text,
+      sourceCitation: result.sourceCitation,
+      product: result.product,
+      market: result.market,
+    });
+    const semanticScore = Math.max(0, result.score);
+    const score = semanticScore + keywordScore * 0.35;
+
+    merged.set(result.id, {
+      ...result,
+      semanticScore,
+      keywordScore,
+      score,
+    });
+  }
+
+  for (const result of keywordResults) {
+    const existing = merged.get(result.id);
+    const keywordScore = computeKeywordScore({
+      queryTokens,
+      text: result.text,
+      sourceCitation: result.sourceCitation,
+      product: result.product,
+      market: result.market,
+    });
+
+    if (existing) {
+      existing.keywordScore = Math.max(existing.keywordScore, keywordScore);
+      existing.score = existing.semanticScore + existing.keywordScore * 0.35;
+      continue;
+    }
+
+    merged.set(result.id, {
+      ...result,
+      semanticScore: 0,
+      keywordScore,
+      score: keywordScore * 0.35,
+    });
+  }
+
+  const ranked = Array.from(merged.values())
+    .sort((left, right) => right.score - left.score)
+    .slice(0, Math.max(1, Math.min(params.limit ?? 5, 10)));
+
+  const strongest = ranked[0];
+
+  if (
+    !strongest ||
+    (strongest.keywordScore === 0 && strongest.semanticScore < 0.35) ||
+    strongest.score < 0.15
+  ) {
+    return buildNoEvidenceResult();
+  }
+
+  return {
+    items: ranked.map((item) => ({
+      id: item.id,
+      documentId: item.documentId,
+      chunkIndex: item.chunkIndex,
+      namespace: item.namespace,
+      text: item.text,
+      sourceCitation: item.sourceCitation,
+      locale: item.locale.toLowerCase(),
+      product: item.product,
+      market: item.market,
+      sensitivity: toApiChunkSensitivity(item.sensitivity),
+      metadata: item.metadata,
+      score: Number(item.score.toFixed(4)),
+      semanticScore: Number(item.semanticScore.toFixed(4)),
+      keywordScore: Number(item.keywordScore.toFixed(4)),
+    })),
+    message: null,
+  };
 }
 
 export async function getActiveMembershipForEmail(email: string) {

@@ -403,16 +403,17 @@ describe("T1.0 knowledge documents", () => {
   });
 
   it("keeps semantic retrieval tenant-isolated after embeddings are written", async () => {
+    const uniqueTag = `iso-${Date.now()}`;
     const fileA = new File(
       [
-        "Solar inverter for rooftop projects. Export-ready CE documents. Suitable for EPC partners in MENA.",
+        `Solar inverter ${uniqueTag} for rooftop projects. Export-ready CE documents. Suitable for EPC partners in MENA.`,
       ],
       "tenant-a-solar.txt",
       { type: "text/plain" },
     );
     const fileB = new File(
       [
-        "Hydraulic press maintenance handbook for workshop safety checks and lubrication procedures.",
+        `Hydraulic press ${uniqueTag} maintenance handbook for workshop safety checks and lubrication procedures.`,
       ],
       "tenant-b-press.txt",
       { type: "text/plain" },
@@ -421,18 +422,18 @@ describe("T1.0 knowledge documents", () => {
       tenantContext,
       uploadedByUserId: tenantContext.userId,
       file: fileA,
-      title: "Solar inverter facts",
-      product: "Solar inverter",
-      market: "MENA",
+      title: `Solar inverter facts ${uniqueTag}`,
+      product: `Solar inverter ${uniqueTag}`,
+      market: `MENA-${uniqueTag}`,
       sensitivity: "public",
     });
     const docB = await createKnowledgeDocumentFromUpload({
       tenantContext: tenantContextB,
       uploadedByUserId: tenantContextB.userId,
       file: fileB,
-      title: "Press handbook",
-      product: "Hydraulic press",
-      market: "EU",
+      title: `Press handbook ${uniqueTag}`,
+      product: `Hydraulic press ${uniqueTag}`,
+      market: `EU-${uniqueTag}`,
       sensitivity: "public",
     });
 
@@ -464,15 +465,17 @@ describe("T1.0 knowledge documents", () => {
     const resultsA = await semanticSearchKnowledgeChunks({
       tenantContext,
       userId: tenantContext.userId,
-      query: "rooftop solar inverter for EPC partners",
+      query: `rooftop solar inverter ${uniqueTag} for EPC partners`,
       limit: 3,
+      product: `Solar inverter ${uniqueTag}`,
       fetchImpl: globalThis.fetch,
     });
     const resultsB = await semanticSearchKnowledgeChunks({
       tenantContext: tenantContextB,
       userId: tenantContextB.userId,
-      query: "rooftop solar inverter for EPC partners",
+      query: `rooftop solar inverter ${uniqueTag} for EPC partners`,
       limit: 3,
+      product: `Solar inverter ${uniqueTag}`,
       fetchImpl: globalThis.fetch,
     });
 

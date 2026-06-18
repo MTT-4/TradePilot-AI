@@ -20,6 +20,15 @@ function mergeWhere(args: AnyArgs, tenantId: string) {
   };
 }
 
+function toScopedLookupArgs(args: AnyArgs, tenantId: string) {
+  const payload = { ...((args ?? {}) as Record<string, unknown>) };
+  delete payload.data;
+  delete payload.create;
+  delete payload.update;
+
+  return mergeWhere(payload, tenantId);
+}
+
 function assertTenantContext(
   context: TenantContext | null | undefined,
 ): TenantContext {
@@ -117,7 +126,7 @@ async function runTenantScopedOperation(params: {
       });
     case "update": {
       const existing = await baseDelegate.findFirst(
-        mergeWhere(args, context.tenantId),
+        toScopedLookupArgs(args, context.tenantId),
       );
 
       if (!existing || typeof existing !== "object" || !("id" in existing)) {
@@ -131,7 +140,7 @@ async function runTenantScopedOperation(params: {
     }
     case "delete": {
       const existing = await baseDelegate.findFirst(
-        mergeWhere(args, context.tenantId),
+        toScopedLookupArgs(args, context.tenantId),
       );
 
       if (!existing || typeof existing !== "object" || !("id" in existing)) {
@@ -144,7 +153,7 @@ async function runTenantScopedOperation(params: {
     }
     case "upsert": {
       const existing = await baseDelegate.findFirst(
-        mergeWhere(args, context.tenantId),
+        toScopedLookupArgs(args, context.tenantId),
       );
 
       if (existing && typeof existing === "object" && "id" in existing) {

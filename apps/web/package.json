@@ -11,7 +11,10 @@
     "test": "vitest run"
   },
   "dependencies": {
+    "bcryptjs": "^3.0.3",
     "next": "16.2.9",
+    "next-auth": "^5.0.0-beta.31",
+    "otpauth": "^9.5.1",
     "pg": "^8.16.3",
     "react": "19.2.4",
     "react-dom": "19.2.4",

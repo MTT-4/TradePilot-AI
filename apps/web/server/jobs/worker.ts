@@ -9,6 +9,7 @@ import {
 import { getTenantPrisma } from "@/server/db/tenant-prisma";
 import {
   markKnowledgeDocumentParseFailed,
+  runEmbedDocumentJob,
   runParseDocumentJob,
 } from "@/server/kb/service";
 
@@ -99,6 +100,13 @@ async function queueProcessor(bullJob: Job<QueuePayload>) {
             documentId: String(bullJob.data.input.documentId ?? ""),
             reportProgress: reporter.reportProgress,
           })
+        : bullJob.data.type === JobType.EMBED_DOCUMENT
+          ? await runEmbedDocumentJob({
+              tenantId: bullJob.data.tenantId,
+              requestedByUserId: bullJob.data.requestedByUserId,
+              documentId: String(bullJob.data.input.documentId ?? ""),
+              reportProgress: reporter.reportProgress,
+            })
         : await processDemoJob(bullJob, reporter);
 
     await updateJobState({

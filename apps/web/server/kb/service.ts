@@ -6,6 +6,7 @@ import {
   KnowledgeDocumentStatus,
   KnowledgeSensitivity,
   LocaleCode,
+  ModelTaskType,
   MembershipRole,
 } from "@prisma/client";
 import { ApiError } from "@/server/api/errors";
@@ -15,6 +16,7 @@ import { getPrismaClient } from "@/server/db/prisma";
 import { getTenantObjectBuffer, putTenantObject } from "@/server/storage/object-store";
 import { buildKnowledgeChunks } from "@/server/kb/chunker";
 import { fetchAndParseKnowledgeUrl, parseKnowledgeBuffer } from "@/server/kb/parser";
+import { createModelGateway } from "@/server/model-gateway";
 import {
   parseKnowledgeSensitivity,
   suggestKnowledgeSensitivity,
@@ -104,6 +106,10 @@ function toApiSourceType(value: FileSourceType) {
   return value.toLowerCase();
 }
 
+function serializeVector(values: number[]) {
+  return `[${values.join(",")}]`;
+}
+
 async function createKnowledgeDocumentRecord(params: {
   tenantContext: TenantContext;
   uploadedByUserId: string;
@@ -149,6 +155,22 @@ async function enqueueParseDocumentJob(params: {
     tenantContext: params.tenantContext,
     requestedByUserId: params.requestedByUserId,
     type: JobType.PARSE_DOCUMENT,
+    input: {
+      documentId: params.documentId,
+    },
+    maxAttempts: 1,
+  });
+}
+
+async function enqueueEmbedDocumentJob(params: {
+  tenantContext: TenantContext;
+  requestedByUserId: string;
+  documentId: string;
+}) {
+  return enqueueTenantJob({
+    tenantContext: params.tenantContext,
+    requestedByUserId: params.requestedByUserId,
+    type: JobType.EMBED_DOCUMENT,
     input: {
       documentId: params.documentId,
     },
@@ -608,6 +630,12 @@ export async function runParseDocumentJob(params: {
     },
   });
   await params.reportProgress(98);
+  const embedJob = await enqueueEmbedDocumentJob({
+    tenantContext,
+    requestedByUserId: params.requestedByUserId ?? "system",
+    documentId: document.id,
+  });
+  await params.reportProgress(99);
 
   return {
     documentId: document.id,
@@ -615,7 +643,137 @@ export async function runParseDocumentJob(params: {
     parsedObjectKey,
     extractedCharacters: parsed.text.length,
     chunkCount: chunks.length,
+    embedJobId: embedJob.jobId,
     locale: document.locale.toLowerCase(),
+  };
+}
+
+async function updateKnowledgeChunkEmbedding(params: {
+  tenantContext: TenantContext;
+  chunkId: string;
+  embedding: number[];
+}) {
+  const tenantPrisma = getTenantPrisma(params.tenantContext);
+
+  await tenantPrisma.$executeRawUnsafe(
+    `
+      UPDATE "knowledge_chunks"
+      SET "embedding" = $1::vector,
+          "updated_at" = NOW()
+      WHERE "id" = $2
+        AND "tenant_id" = $3
+    `,
+    serializeVector(params.embedding),
+    params.chunkId,
+    params.tenantContext.tenantId,
+  );
+}
+
+export async function runEmbedDocumentJob(params: {
+  tenantId: string;
+  requestedByUserId?: string;
+  documentId: string;
+  reportProgress: (progress: number) => Promise<void>;
+  fetchImpl?: typeof fetch;
+}) {
+  const tenantContext = getSystemTenantContext(
+    params.tenantId,
+    params.requestedByUserId,
+  );
+  const tenantPrisma = getTenantPrisma(tenantContext);
+  const document = await tenantPrisma.knowledgeDocument.findUnique({
+    where: {
+      id: params.documentId,
+    },
+    select: {
+      id: true,
+      status: true,
+      title: true,
+      sensitivity: true,
+    },
+  });
+
+  if (!document) {
+    throw new Error("Knowledge document not found.");
+  }
+
+  const chunks = await tenantPrisma.knowledgeChunk.findMany({
+    where: {
+      documentId: document.id,
+    },
+    orderBy: {
+      chunkIndex: "asc",
+    },
+    select: {
+      id: true,
+      chunkIndex: true,
+      text: true,
+      sensitivity: true,
+    },
+  });
+
+  if (chunks.length === 0) {
+    throw new Error("Knowledge document has no chunks to embed.");
+  }
+
+  await tenantPrisma.knowledgeDocument.update({
+    where: {
+      id: document.id,
+    },
+    data: {
+      status: KnowledgeDocumentStatus.EMBEDDING,
+    },
+  });
+  await params.reportProgress(10);
+
+  const gateway = createModelGateway({
+    fetchImpl: params.fetchImpl,
+  });
+
+  for (const [index, chunk] of chunks.entries()) {
+    const result = await gateway.embed({
+      tenantContext,
+      userId: params.requestedByUserId,
+      taskType: ModelTaskType.EMBED,
+      text: chunk.text,
+      sensitivity: chunk.sensitivity,
+      requestSummary: `kb embed ${document.id}#${chunk.chunkIndex}`,
+    });
+
+    if (!result) {
+      throw new Error("Embedding gateway returned no result.");
+    }
+
+    if (result.embedding.length !== 1024) {
+      throw new Error(
+        `Embedding dimension mismatch for chunk ${chunk.id}: expected 1024, got ${result.embedding.length}.`,
+      );
+    }
+
+    await updateKnowledgeChunkEmbedding({
+      tenantContext,
+      chunkId: chunk.id,
+      embedding: result.embedding,
+    });
+
+    const progress = 10 + Math.round(((index + 1) / chunks.length) * 85);
+    await params.reportProgress(Math.min(progress, 95));
+  }
+
+  await tenantPrisma.knowledgeDocument.update({
+    where: {
+      id: document.id,
+    },
+    data: {
+      status: KnowledgeDocumentStatus.READY,
+    },
+  });
+  await params.reportProgress(99);
+
+  return {
+    documentId: document.id,
+    nextStatus: KnowledgeDocumentStatus.READY.toLowerCase(),
+    embeddedChunks: chunks.length,
   };
 }
 
@@ -714,6 +872,129 @@ export async function getKnowledgeChunksForTests(params: {
       metadata: true,
     },
   });
+}
+
+export async function getKnowledgeChunkEmbeddingsForTests(params: {
+  tenantContext: TenantContext;
+  documentId: string;
+}) {
+  const tenantPrisma = getTenantPrisma(params.tenantContext);
+
+  return tenantPrisma.$queryRawUnsafe<
+    Array<{
+      id: string;
+      chunkIndex: number;
+      embeddingText: string | null;
+    }>
+  >(
+    `
+      SELECT "id",
+             "chunk_index" AS "chunkIndex",
+             CASE
+               WHEN "embedding" IS NULL THEN NULL
+               ELSE "embedding"::text
+             END AS "embeddingText"
+      FROM "knowledge_chunks"
+      WHERE "tenant_id" = $1
+        AND "document_id" = $2
+      ORDER BY "chunk_index" ASC
+    `,
+    params.tenantContext.tenantId,
+    params.documentId,
+  );
+}
+
+export async function semanticSearchKnowledgeChunks(params: {
+  tenantContext: TenantContext;
+  userId?: string;
+  query: string;
+  limit?: number;
+  allowInternalOnly?: boolean;
+  product?: string | null;
+  market?: string | null;
+  fetchImpl?: typeof fetch;
+}) {
+  const gateway = createModelGateway({
+    fetchImpl: params.fetchImpl,
+  });
+  const embeddingResult = await gateway.embed({
+    tenantContext: params.tenantContext,
+    userId: params.userId,
+    taskType: ModelTaskType.EMBED,
+    text: params.query,
+    sensitivity: params.allowInternalOnly
+      ? KnowledgeSensitivity.INTERNAL_ONLY
+      : KnowledgeSensitivity.PUBLIC,
+    requestSummary: `kb semantic search: ${params.query}`,
+  });
+
+  if (!embeddingResult) {
+    throw new Error("Embedding gateway returned no result.");
+  }
+  const tenantPrisma = getTenantPrisma(params.tenantContext);
+  const vectorLiteral = serializeVector(embeddingResult.embedding);
+  const limit = Math.max(1, Math.min(params.limit ?? 5, 20));
+  const sqlParts = [
+    `
+      SELECT "id",
+             "tenant_id" AS "tenantId",
+             "document_id" AS "documentId",
+             "chunk_index" AS "chunkIndex",
+             "namespace",
+             "text",
+             "source_citation" AS "sourceCitation",
+             "locale",
+             "product",
+             "market",
+             "sensitivity",
+             "metadata",
+             1 - ("embedding" <=> $1::vector) AS "score"
+      FROM "knowledge_chunks"
+      WHERE "tenant_id" = $2
+        AND "embedding" IS NOT NULL
+    `,
+  ];
+  const args: Array<string | number> = [vectorLiteral, params.tenantContext.tenantId];
+  let parameterIndex = 3;
+
+  if (!params.allowInternalOnly) {
+    sqlParts.push(`AND "sensitivity" = 'public'`);
+  }
+
+  if (params.product) {
+    sqlParts.push(`AND "product" = $${parameterIndex}`);
+    args.push(params.product);
+    parameterIndex += 1;
+  }
+
+  if (params.market) {
+    sqlParts.push(`AND "market" = $${parameterIndex}`);
+    args.push(params.market);
+    parameterIndex += 1;
+  }
+
+  sqlParts.push(
+    `ORDER BY "embedding" <=> $1::vector ASC LIMIT $${parameterIndex}`,
+  );
+  args.push(limit);
+
+  return tenantPrisma.$queryRawUnsafe<
+    Array<{
+      id: string;
+      tenantId: string;
+      documentId: string;
+      chunkIndex: number;
+      namespace: string;
+      text: string;
+      sourceCitation: string | null;
+      locale: LocaleCode;
+      product: string | null;
+      market: string | null;
+      sensitivity: KnowledgeSensitivity;
+      metadata: unknown;
+      score: number;
+    }>
+  >(sqlParts.join("\n"), ...args);
 }
 
 export async function getActiveMembershipForEmail(email: string) {

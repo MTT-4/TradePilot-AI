@@ -1,0 +1,46 @@
+.DS_Store
+
+# Node
+node_modules/
+.next/
+dist/
+build/
+coverage/
+.turbo/
+
+# Environment
+.env
+.env.*
+!.env.example
+!.env.*.example
+
+# Logs
+*.log
+npm-debug.log*
+pnpm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Runtime files
+tmp/
+temp/
+*.pid
+*.seed
+runtime/logs/
+runtime/tmp/
+runtime/models/
+
+# Local data and backups
+backups/
+storage/
+
+# Docker/local services
+.docker/
+
+# Test artifacts
+playwright-report/
+test-results/
+
+# Editor
+.idea/
+.vscode/

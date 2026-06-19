@@ -16,6 +16,7 @@ import { hasMinimumRole } from "@/server/auth/rbac";
 import type { TenantContext } from "@/server/db/tenant-context";
 import { getPrismaClient } from "@/server/db/prisma";
 import { getTenantPrisma } from "@/server/db/tenant-prisma";
+import { markContentItemPublished } from "@/server/content-packs/service";
 import { enqueueTenantJob } from "@/server/jobs/service";
 import { approveReplySendTask } from "@/server/replies/service";
 
@@ -424,13 +425,15 @@ function sanitizeModelLocaleDraft(
 }
 
 function deriveQuickAnswer(localeDraft: ModelLocaleDraft) {
-  const faqAnswer = localeDraft.faq[0]?.answer?.trim();
+  const faqAnswer = localeDraft.faq?.[0]?.answer?.trim();
 
   if (faqAnswer) {
     return faqAnswer.slice(0, 220);
   }
 
-  return localeDraft.subheadline.trim().slice(0, 220);
+  return (localeDraft.subheadline ?? localeDraft.headline ?? "")
+    .trim()
+    .slice(0, 220);
 }
 
 function buildCandidateSectionId(candidateId: string) {
@@ -2414,6 +2417,53 @@ export async function approveHitlTask(params: {
     };
   }
 
+  if (task.type === HitlTaskType.CONTENT_PUBLISH) {
+    const contentPayload = (task.payload ?? {}) as {
+      itemId?: string;
+    };
+
+    if (!contentPayload.itemId) {
+      throw new ApiError(409, "CONFLICT", "Unsupported HITL task payload.");
+    }
+
+    if (!hasMinimumRole(params.tenantContext.role, "OPERATOR")) {
+      throw new ApiError(403, "FORBIDDEN", "This HITL task requires operator role or higher.");
+    }
+
+    await markContentItemPublished({
+      tenantContext: params.tenantContext,
+      itemId: contentPayload.itemId,
+      requestedByUserId: params.approvedByUserId,
+    });
+
+    await tenantPrisma.hitlTask.update({
+      where: {
+        id: params.hitlTaskId,
+      },
+      data: {
+        status: HitlStatus.APPROVED,
+        approvedByUserId: params.approvedByUserId,
+        resolvedAt: new Date(),
+      },
+    });
+
+    await createAuditLog({
+      tenantId: params.tenantContext.tenantId,
+      actorUserId: params.approvedByUserId,
+      action: "hitl_task_approved",
+      entityType: task.entityType,
+      entityId: task.entityId,
+      metadata: {
+        hitlTaskId: task.id,
+      },
+    });
+
+    return {
+      hitlTaskId: params.hitlTaskId,
+      status: "approved",
+    };
+  }
+
   if (!hasMinimumRole(params.tenantContext.role, "ADMIN")) {
     throw new ApiError(403, "FORBIDDEN", "This HITL task requires admin role or higher.");
   }
@@ -2537,7 +2587,7 @@ function buildSiteJsonLd(params: {
   };
 }) {
   const pageUrl = `${params.appUrl.replace(/\/$/, "")}${params.locale.urlPath}`;
-  const faqEntities = params.locale.translatedContent.faq.map((item) => ({
+  const faqEntities = (params.locale.translatedContent.faq ?? []).map((item) => ({
     "@type": "Question",
     name: item.question,
     acceptedAnswer: {

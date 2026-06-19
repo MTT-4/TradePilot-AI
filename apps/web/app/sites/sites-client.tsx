@@ -1,6 +1,8 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { HitlAction } from "@/app/_components/hitl-action";
+import { formatTaskType } from "@/app/_components/hitl-meta";
 
 type Membership = {
   tenantId: string;
@@ -471,14 +473,15 @@ export function SitesClient() {
               {selectedSite ? (
                 <>
                   <div className="mt-5 flex flex-wrap gap-2">
-                    <button
-                      type="button"
-                      className="rounded-full bg-[#1f6a52] px-4 py-2 text-sm font-medium text-white disabled:bg-[#8cae9f]"
-                      disabled={!canEdit(currentMembership?.role) || busyKey === "publish"}
-                      onClick={() => void postJson(`/api/sites/${selectedSite.id}/publish-request`, {}, "publish")}
-                    >
-                      {busyKey === "publish" ? "提交中…" : "发起上线审批"}
-                    </button>
+                    <HitlAction
+                      tenantId={selectedTenantId}
+                      endpoint={`/api/sites/${selectedSite.id}/publish-request`}
+                      idleLabel="发起上线审批"
+                      busyLabel="提交中…"
+                      disabled={!canEdit(currentMembership?.role)}
+                      onError={(message) => setError(message || null)}
+                      onSuccess={() => refreshCurrent()}
+                    />
                     <button
                       type="button"
                       className="rounded-full border border-[#ddd3bd] bg-white px-4 py-2 text-sm text-[#1f241f] disabled:opacity-50"
@@ -525,20 +528,20 @@ export function SitesClient() {
                   <div key={task.id} className="rounded-2xl border border-[#ece5d3] bg-[#fffdf8] p-4">
                     <div className="flex items-center justify-between gap-4">
                       <div>
-                        <div className="font-medium text-[#1f241f]">{task.type}</div>
+                        <div className="font-medium text-[#1f241f]">{formatTaskType(task.type)}</div>
                         <div className="mt-1 text-xs text-[#6a6457]">
                           {task.payload.mode === "autofill_candidate" ? "自动补全确认上线" : "站点上线"} · {formatTime(task.createdAt)}
                         </div>
                       </div>
                       {canApprove(currentMembership?.role) ? (
-                        <button
-                          type="button"
-                          className="rounded-full bg-[#1f6a52] px-4 py-2 text-sm text-white disabled:bg-[#8cae9f]"
-                          disabled={busyKey === `approve-${task.id}`}
-                          onClick={() => void postJson(`/api/hitl/${task.id}/approve`, {}, `approve-${task.id}`)}
-                        >
-                          {busyKey === `approve-${task.id}` ? "审批中…" : "批准"}
-                        </button>
+                        <HitlAction
+                          tenantId={selectedTenantId}
+                          endpoint={`/api/hitl/${task.id}/approve`}
+                          idleLabel="批准"
+                          busyLabel="审批中…"
+                          onError={(message) => setError(message || null)}
+                          onSuccess={() => refreshCurrent()}
+                        />
                       ) : (
                         <span className="rounded-full border border-[#ddd3bd] px-3 py-1 text-xs text-[#6a6457]">
                           等待管理员

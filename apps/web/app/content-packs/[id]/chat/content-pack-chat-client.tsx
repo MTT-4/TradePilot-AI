@@ -296,7 +296,7 @@ export function ContentPackChatClient({ packId }: { packId: string }) {
       const response = await fetch(
         published
           ? `/api/content-items/${itemId}/unmark`
-          : `/api/content-items/${itemId}/mark-published`,
+          : `/api/content-items/${itemId}/publish-request`,
         {
           method: "POST",
           headers: {
@@ -306,14 +306,28 @@ export function ContentPackChatClient({ packId }: { packId: string }) {
       );
 
       if (!response.ok) {
-        throw new Error("更新发布状态失败。");
+        throw new Error(published ? "更新发布状态失败。" : "提交发布审批失败。");
       }
 
-      const nextPack = (await response.json()) as PackResponse;
-      setPack(nextPack);
+      if (published) {
+        const nextPack = (await response.json()) as PackResponse;
+        setPack(nextPack);
+      } else {
+        setMessages((current) => [
+          ...current,
+          {
+            role: "assistant",
+            content: "已发起内容发布审批，可在设计队列或 HITL 中继续处理。",
+          },
+        ]);
+      }
     } catch (toggleError) {
       setError(
-        toggleError instanceof Error ? toggleError.message : "更新发布状态失败。",
+        toggleError instanceof Error
+          ? toggleError.message
+          : published
+            ? "更新发布状态失败。"
+            : "提交发布审批失败。",
       );
     } finally {
       setSubmitting(false);
@@ -537,7 +551,7 @@ export function ContentPackChatClient({ packId }: { packId: string }) {
                         onClick={() => void togglePublished(item.id, published)}
                         disabled={submitting}
                       >
-                        {published ? "撤回已发" : "标记已发"}
+                        {published ? "撤回已发" : "发起发布审批"}
                       </button>
                     </div>
 

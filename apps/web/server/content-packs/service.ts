@@ -8,6 +8,8 @@ import {
   ContentPackStatus,
   FileKind,
   FileSourceType,
+  HitlStatus,
+  HitlTaskType,
   JobType,
   KnowledgeSensitivity,
   LocaleCode,
@@ -2059,6 +2061,76 @@ export async function markContentItemPublished(params: {
   });
 
   return getContentPackDetail(params.tenantContext, item.contentPackId);
+}
+
+export async function requestContentItemPublish(params: {
+  tenantContext: TenantContext;
+  itemId: string;
+  requestedByUserId?: string;
+}) {
+  const item = await getContentItemRecord({
+    tenantContext: params.tenantContext,
+    itemId: params.itemId,
+  });
+
+  if (!item) {
+    throw new ApiError(404, "NOT_FOUND", "Content item not found.");
+  }
+
+  const tenantPrisma = getTenantPrisma(params.tenantContext);
+  const existing = await tenantPrisma.hitlTask.findFirst({
+    where: {
+      type: HitlTaskType.CONTENT_PUBLISH,
+      status: HitlStatus.PENDING,
+      entityType: "content_item",
+      entityId: params.itemId,
+    },
+    select: {
+      id: true,
+    },
+  });
+
+  if (existing) {
+    return {
+      hitlTaskId: existing.id,
+      reused: true,
+    };
+  }
+
+  const task = await getPrismaClient().hitlTask.create({
+    data: {
+      tenantId: params.tenantContext.tenantId,
+      requestedByUserId: params.requestedByUserId,
+      type: HitlTaskType.CONTENT_PUBLISH,
+      status: HitlStatus.PENDING,
+      entityType: "content_item",
+      entityId: params.itemId,
+      payload: {
+        itemId: params.itemId,
+        contentPackId: item.contentPackId,
+      },
+    },
+    select: {
+      id: true,
+    },
+  });
+
+  await createAuditLog({
+    tenantId: params.tenantContext.tenantId,
+    actorUserId: params.requestedByUserId,
+    action: "content_publish_requested",
+    entityType: "content_item",
+    entityId: params.itemId,
+    metadata: {
+      contentPackId: item.contentPackId,
+      platform: item.platform.toLowerCase(),
+    },
+  });
+
+  return {
+    hitlTaskId: task.id,
+    reused: false,
+  };
 }
 
 export async function unmarkContentItemPublished(params: {

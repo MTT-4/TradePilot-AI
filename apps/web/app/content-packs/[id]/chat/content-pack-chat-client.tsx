@@ -89,6 +89,13 @@ type ChatMessage = {
   content: string;
 };
 
+type ImageGenerationDraft = {
+  mode: "text_to_image" | "image_to_image" | "background_swap";
+  backgroundStyle: string;
+  referenceLabel: string;
+  referenceFile: File | null;
+};
+
 export function ContentPackChatClient({ packId }: { packId: string }) {
   const [tenantId, setTenantId] = useState<string | null>(null);
   const [tenantName, setTenantName] = useState<string>("");
@@ -100,6 +107,7 @@ export function ContentPackChatClient({ packId }: { packId: string }) {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [draftBodies, setDraftBodies] = useState<Record<string, string>>({});
+  const [imageDrafts, setImageDrafts] = useState<Record<string, ImageGenerationDraft>>({});
 
   useEffect(() => {
     let cancelled = false;
@@ -155,6 +163,19 @@ export function ContentPackChatClient({ packId }: { packId: string }) {
           setDraftBodies(
             Object.fromEntries(
               nextPack.items.map((item) => [item.id, item.body]),
+            ),
+          );
+          setImageDrafts(
+            Object.fromEntries(
+              nextPack.items.map((item) => [
+                item.id,
+                {
+                  mode: "text_to_image",
+                  backgroundStyle: "",
+                  referenceLabel: "",
+                  referenceFile: null,
+                },
+              ]),
             ),
           );
         }
@@ -308,13 +329,38 @@ export function ContentPackChatClient({ packId }: { packId: string }) {
     setError(null);
 
     try {
+      const draft = imageDrafts[itemId] ?? {
+        mode: "text_to_image" as const,
+        backgroundStyle: "",
+        referenceLabel: "",
+        referenceFile: null,
+      };
+      const useMultipart =
+        draft.referenceFile instanceof File ||
+        draft.mode !== "text_to_image" ||
+        draft.backgroundStyle.trim() ||
+        draft.referenceLabel.trim();
       const response = await fetch(`/api/content-items/${itemId}/generate-image`, {
         method: "POST",
         headers: {
-          "content-type": "application/json",
           "x-tenant-id": tenantId,
         },
-        body: JSON.stringify({}),
+        body: useMultipart
+          ? (() => {
+              const formData = new FormData();
+              formData.set("mode", draft.mode);
+              if (draft.backgroundStyle.trim()) {
+                formData.set("backgroundStyle", draft.backgroundStyle.trim());
+              }
+              if (draft.referenceLabel.trim()) {
+                formData.set("referenceLabel", draft.referenceLabel.trim());
+              }
+              if (draft.referenceFile instanceof File) {
+                formData.set("referenceFile", draft.referenceFile);
+              }
+              return formData;
+            })()
+          : JSON.stringify({}),
       });
 
       if (!response.ok) {
@@ -323,6 +369,13 @@ export function ContentPackChatClient({ packId }: { packId: string }) {
 
       const nextPack = (await response.json()) as PackResponse;
       setPack(nextPack);
+      setImageDrafts((current) => ({
+        ...current,
+        [itemId]: {
+          ...current[itemId],
+          referenceFile: null,
+        },
+      }));
     } catch (generationError) {
       setError(
         generationError instanceof Error ? generationError.message : "生成图像失败。",
@@ -555,6 +608,99 @@ export function ContentPackChatClient({ packId }: { packId: string }) {
                         )}
                       </div>
                     </div>
+
+                    {item.mediaType !== "video_script" ? (
+                      <div className="mt-4 grid gap-3 rounded-[20px] border border-[#ece2cd] bg-white/85 p-4 md:grid-cols-2">
+                        <label className="text-sm text-[#4f4a40]">
+                          <div className="font-medium text-[#1f241f]">图像模式</div>
+                          <select
+                            className="mt-2 w-full rounded-2xl border border-[#d8cfba] bg-white px-3 py-2 text-sm"
+                            value={imageDrafts[item.id]?.mode ?? "text_to_image"}
+                            onChange={(event) =>
+                              setImageDrafts((current) => ({
+                                ...current,
+                                [item.id]: {
+                                  ...(current[item.id] ?? {
+                                    mode: "text_to_image",
+                                    backgroundStyle: "",
+                                    referenceLabel: "",
+                                    referenceFile: null,
+                                  }),
+                                  mode: event.target.value as ImageGenerationDraft["mode"],
+                                },
+                              }))
+                            }
+                          >
+                            <option value="text_to_image">文生图</option>
+                            <option value="image_to_image">图生图</option>
+                            <option value="background_swap">换背景</option>
+                          </select>
+                        </label>
+                        <label className="text-sm text-[#4f4a40]">
+                          <div className="font-medium text-[#1f241f]">背景风格</div>
+                          <input
+                            className="mt-2 w-full rounded-2xl border border-[#d8cfba] bg-white px-3 py-2 text-sm"
+                            placeholder="如：展会展台 / 仓储场景"
+                            value={imageDrafts[item.id]?.backgroundStyle ?? ""}
+                            onChange={(event) =>
+                              setImageDrafts((current) => ({
+                                ...current,
+                                [item.id]: {
+                                  ...(current[item.id] ?? {
+                                    mode: "text_to_image",
+                                    backgroundStyle: "",
+                                    referenceLabel: "",
+                                    referenceFile: null,
+                                  }),
+                                  backgroundStyle: event.target.value,
+                                },
+                              }))
+                            }
+                          />
+                        </label>
+                        <label className="text-sm text-[#4f4a40] md:col-span-2">
+                          <div className="font-medium text-[#1f241f]">参考图说明 / 文件</div>
+                          <input
+                            className="mt-2 w-full rounded-2xl border border-[#d8cfba] bg-white px-3 py-2 text-sm"
+                            placeholder="如：保留产品角度，只换成中东展会背景"
+                            value={imageDrafts[item.id]?.referenceLabel ?? ""}
+                            onChange={(event) =>
+                              setImageDrafts((current) => ({
+                                ...current,
+                                [item.id]: {
+                                  ...(current[item.id] ?? {
+                                    mode: "text_to_image",
+                                    backgroundStyle: "",
+                                    referenceLabel: "",
+                                    referenceFile: null,
+                                  }),
+                                  referenceLabel: event.target.value,
+                                },
+                              }))
+                            }
+                          />
+                          <input
+                            className="mt-2 block w-full text-sm text-[#4f4a40]"
+                            type="file"
+                            accept="image/*"
+                            onChange={(event) =>
+                              setImageDrafts((current) => ({
+                                ...current,
+                                [item.id]: {
+                                  ...(current[item.id] ?? {
+                                    mode: "text_to_image",
+                                    backgroundStyle: "",
+                                    referenceLabel: "",
+                                    referenceFile: null,
+                                  }),
+                                  referenceFile: event.target.files?.[0] ?? null,
+                                },
+                              }))
+                            }
+                          />
+                        </label>
+                      </div>
+                    ) : null}
 
                     {item.mediaType !== "video_script" &&
                     item.spec.generatedAssets &&

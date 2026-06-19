@@ -3,7 +3,10 @@ import { z } from "zod";
 import { auth } from "@/auth";
 import { ApiError, routeErrorToResponse } from "@/server/api/errors";
 import { requireTenantAccess } from "@/server/auth/access";
-import { generateContentItemImageAssets } from "@/server/content-packs/service";
+import {
+  generateContentItemImageAssets,
+  storeContentItemReferenceImage,
+} from "@/server/content-packs/service";
 
 const requestSchema = z.object({
   mode: z
@@ -26,10 +29,39 @@ export const POST = auth(async (request, routeContext) => {
       userId,
       MembershipRole.OPERATOR,
     );
-    const rawBody = await request.text();
-    const input = requestSchema.parse(
-      rawBody ? JSON.parse(rawBody) : {},
-    );
+    let input: z.infer<typeof requestSchema> = {
+      mode: "text_to_image",
+    };
+    const contentType = request.headers.get("content-type") ?? "";
+
+    if (contentType.includes("multipart/form-data")) {
+      const formData = await request.formData();
+      const fileValue = formData.get("referenceFile");
+      const storedReference =
+        fileValue instanceof File
+          ? await storeContentItemReferenceImage({
+              tenantContext: context,
+              uploadedByUserId: userId,
+              file: fileValue,
+            })
+          : null;
+
+      input = requestSchema.parse({
+        mode: typeof formData.get("mode") === "string" ? formData.get("mode") : undefined,
+        backgroundStyle:
+          typeof formData.get("backgroundStyle") === "string"
+            ? formData.get("backgroundStyle")
+            : undefined,
+        referenceLabel:
+          typeof formData.get("referenceLabel") === "string"
+            ? formData.get("referenceLabel")
+            : undefined,
+        referenceFileId: storedReference?.id,
+      });
+    } else {
+      const rawBody = await request.text();
+      input = requestSchema.parse(rawBody ? JSON.parse(rawBody) : {});
+    }
     const params = await routeContext.params;
 
     return Response.json(

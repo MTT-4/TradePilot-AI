@@ -70,6 +70,7 @@ const contentItemImageGenerationSchema = z.object({
     .default("text_to_image"),
   backgroundStyle: z.string().trim().min(1).max(120).optional(),
   referenceLabel: z.string().trim().min(1).max(120).optional(),
+  referenceFileId: z.string().min(1).optional(),
 });
 
 const modelPackItemSchema = z.object({
@@ -1736,6 +1737,53 @@ async function getContentItemRecord(params: {
   });
 }
 
+export async function storeContentItemReferenceImage(params: {
+  tenantContext: TenantContext;
+  uploadedByUserId?: string;
+  file: File;
+}) {
+  if (!params.file.size) {
+    throw new ApiError(400, "VALIDATION", "Reference image must not be empty.");
+  }
+
+  const tenantPrisma = getTenantPrisma(params.tenantContext);
+  const buffer = Buffer.from(await params.file.arrayBuffer());
+  const originalName = params.file.name || "reference-image";
+  const mimeType = params.file.type || "application/octet-stream";
+  const objectKey = `content-packs/reference/${randomUUID()}-${normalizeSlugPart(
+    originalName,
+  ) || "image"}`;
+  const storedObject = await putTenantObject({
+    tenantId: params.tenantContext.tenantId,
+    objectKey,
+    body: buffer,
+    contentType: mimeType,
+  });
+
+  const storedFile = await tenantPrisma.file.create({
+    data: {
+      tenantId: params.tenantContext.tenantId,
+      uploadedByUserId: params.uploadedByUserId,
+      sourceType: FileSourceType.UPLOAD,
+      kind: FileKind.IMAGE,
+      originalName,
+      mimeType,
+      sizeBytes: buffer.byteLength,
+      bucket: storedObject.bucket,
+      objectKey,
+      checksum: createHash("sha256").update(buffer).digest("hex"),
+    },
+    select: {
+      id: true,
+      originalName: true,
+      mimeType: true,
+      sizeBytes: true,
+    },
+  });
+
+  return storedFile;
+}
+
 export async function updateContentItem(params: {
   tenantContext: TenantContext;
   itemId: string;
@@ -1822,6 +1870,32 @@ export async function generateContentItemImageAssets(params: {
   const tenantPrisma = getTenantPrisma(params.tenantContext);
   const normalizedSpec = serializeContentItemSpec(item.spec);
   const brandKit = await getLatestBrandKit(params.tenantContext);
+  const referenceFile =
+    input.referenceFileId
+      ? await tenantPrisma.file.findFirst({
+          where: {
+            id: input.referenceFileId,
+            kind: FileKind.IMAGE,
+          },
+          select: {
+            id: true,
+            originalName: true,
+            mimeType: true,
+          },
+        })
+      : null;
+
+  if (
+    (input.mode === "image_to_image" || input.mode === "background_swap") &&
+    !referenceFile
+  ) {
+    throw new ApiError(
+      400,
+      "VALIDATION",
+      "Reference image is required for image_to_image or background_swap mode.",
+    );
+  }
+
   const { width, height } = parseDimensions(
     typeof normalizedSpec.dimensions === "string"
       ? normalizedSpec.dimensions
@@ -1854,7 +1928,7 @@ export async function generateContentItemImageAssets(params: {
       prompt,
       visualDirection,
       backgroundStyle: input.backgroundStyle,
-      referenceLabel: input.referenceLabel,
+      referenceLabel: input.referenceLabel ?? referenceFile?.originalName,
       primaryColor,
       secondaryColor,
       width,
@@ -1902,7 +1976,8 @@ export async function generateContentItemImageAssets(params: {
       previewUrl: `/api/files/${file.id}`,
       createdAt: new Date().toISOString(),
       backgroundStyle: input.backgroundStyle ?? null,
-      referenceLabel: input.referenceLabel ?? null,
+      referenceLabel: input.referenceLabel ?? referenceFile?.originalName ?? null,
+      referenceFileId: referenceFile?.id ?? null,
     });
   }
 
@@ -1939,6 +2014,7 @@ export async function generateContentItemImageAssets(params: {
     metadata: {
       mode: input.mode,
       generatedVariants: variants,
+      referenceFileId: referenceFile?.id ?? null,
     },
   });
 

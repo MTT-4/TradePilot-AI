@@ -13,6 +13,7 @@ import {
   getContentPackDetail,
   listPlatformRules,
   markContentItemPublished,
+  storeContentItemReferenceImage,
   unmarkContentItemPublished,
   updateContentItem,
 } from "@/server/content-packs/service";
@@ -366,6 +367,42 @@ describe("T3.0 content packs", () => {
     });
 
     expect(generatedBuffer.toString("utf8")).toContain("<svg");
+
+    const referenceImage = await storeContentItemReferenceImage({
+      tenantContext,
+      uploadedByUserId: tenantContext.userId,
+      file: new File(
+        [Buffer.from("<svg xmlns=\"http://www.w3.org/2000/svg\"></svg>", "utf8")],
+        "reference.svg",
+        {
+          type: "image/svg+xml",
+        },
+      ),
+    });
+    const withBackgroundSwap = await generateContentItemImageAssets({
+      tenantContext,
+      itemId: linkedinAfterChat!.id,
+      requestedByUserId: tenantContext.userId,
+      input: {
+        mode: "background_swap",
+        backgroundStyle: "Middle East trade show booth",
+        referenceFileId: referenceImage.id,
+      },
+    });
+    const swappedItem = withBackgroundSwap.items.find(
+      (item) => item.id === linkedinAfterChat!.id,
+    );
+    const swappedAssets = Array.isArray(swappedItem?.spec.generatedAssets)
+      ? swappedItem.spec.generatedAssets
+      : [];
+
+    expect(
+      swappedAssets.some(
+        (asset) =>
+          asset.referenceFileId === referenceImage.id &&
+          asset.backgroundStyle === "Middle East trade show booth",
+      ),
+    ).toBe(true);
 
     const published = await markContentItemPublished({
       tenantContext,

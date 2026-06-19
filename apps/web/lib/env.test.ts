@@ -11,6 +11,7 @@ const validEnv = {
   S3_ACCESS_KEY: "tradepilot",
   S3_SECRET_KEY: "tradepilot-local-secret",
   AUTH_SECRET: "super-secret",
+  INBOUND_EMAIL_WEBHOOK_SECRET: "webhook-secret",
   OPENAI_BASE_URL: "https://api.openai.com/v1",
   OPENAI_API_KEY: "openai-placeholder",
   OPENAI_MODEL: "gpt-4.1-mini",

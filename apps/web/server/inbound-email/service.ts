@@ -248,7 +248,7 @@ export async function ingestInboundEmail(params: {
       contactId: contact.id,
     },
     orderBy: {
-      firstSeenAt: "asc",
+      firstSeenAt: "desc",
     },
     select: {
       id: true,

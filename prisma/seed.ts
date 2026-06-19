@@ -94,28 +94,32 @@ async function main() {
       data: {
         email: "owner-a@tradepilot.local",
         name: "Shenghai Owner",
-        passwordHash: "seed-hash-owner-a",
+        // Password: TradePilot@2026
+        passwordHash: "$2b$12$F7x1tBI1hvqDIZMeffaAGeoo7AeYqmZrWzWJzpeXutvD66iXigAJu",
       },
     }),
     prisma.user.create({
       data: {
         email: "sales-a@tradepilot.local",
         name: "Shenghai Sales",
-        passwordHash: "seed-hash-sales-a",
+        // Password: TradePilot@2026
+        passwordHash: "$2b$12$F7x1tBI1hvqDIZMeffaAGeoo7AeYqmZrWzWJzpeXutvD66iXigAJu",
       },
     }),
     prisma.user.create({
       data: {
         email: "owner-b@tradepilot.local",
         name: "Control Owner",
-        passwordHash: "seed-hash-owner-b",
+        // Password: TradePilot@2026
+        passwordHash: "$2b$12$F7x1tBI1hvqDIZMeffaAGeoo7AeYqmZrWzWJzpeXutvD66iXigAJu",
       },
     }),
     prisma.user.create({
       data: {
         email: "sales-b@tradepilot.local",
         name: "Control Sales",
-        passwordHash: "seed-hash-sales-b",
+        // Password: TradePilot@2026
+        passwordHash: "$2b$12$F7x1tBI1hvqDIZMeffaAGeoo7AeYqmZrWzWJzpeXutvD66iXigAJu",
       },
     }),
   ]);

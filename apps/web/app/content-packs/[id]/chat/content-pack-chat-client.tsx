@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import { useEffect, useMemo, useState } from "react";
 
 type MeResponse = {
@@ -70,6 +71,15 @@ type PackResponse = {
       storyboard?: string[];
       script?: string[];
       durationSeconds?: number;
+      generatedAssets?: Array<{
+        id: string;
+        fileId: string;
+        variant: string;
+        previewUrl: string;
+        mimeType: string;
+        width: number;
+        height: number;
+      }>;
     };
   }>;
 };
@@ -283,6 +293,39 @@ export function ContentPackChatClient({ packId }: { packId: string }) {
     } catch (toggleError) {
       setError(
         toggleError instanceof Error ? toggleError.message : "更新发布状态失败。",
+      );
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  async function generateItemImages(itemId: string) {
+    if (!tenantId) {
+      return;
+    }
+
+    setSubmitting(true);
+    setError(null);
+
+    try {
+      const response = await fetch(`/api/content-items/${itemId}/generate-image`, {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          "x-tenant-id": tenantId,
+        },
+        body: JSON.stringify({}),
+      });
+
+      if (!response.ok) {
+        throw new Error("生成图像失败。");
+      }
+
+      const nextPack = (await response.json()) as PackResponse;
+      setPack(nextPack);
+    } catch (generationError) {
+      setError(
+        generationError instanceof Error ? generationError.message : "生成图像失败。",
       );
     } finally {
       setSubmitting(false);
@@ -513,19 +556,55 @@ export function ContentPackChatClient({ packId }: { packId: string }) {
                       </div>
                     </div>
 
+                    {item.mediaType !== "video_script" &&
+                    item.spec.generatedAssets &&
+                    item.spec.generatedAssets.length > 0 ? (
+                      <div className="mt-4 grid gap-3 md:grid-cols-2">
+                        {item.spec.generatedAssets.map((asset) => (
+                          <div
+                            key={asset.id}
+                            className="overflow-hidden rounded-[20px] border border-[#ece2cd] bg-white/90"
+                          >
+                            <Image
+                              src={asset.previewUrl}
+                              alt={`${item.title} ${asset.variant}`}
+                              width={asset.width}
+                              height={asset.height}
+                              unoptimized
+                              className="h-48 w-full object-cover"
+                            />
+                            <div className="px-4 py-3 text-xs text-[#5b5649]">
+                              {asset.variant} · {asset.width}×{asset.height}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    ) : null}
+
                     {item.notes.length > 0 ? (
                       <div className="mt-4 rounded-[20px] bg-[#faf6eb] p-4 text-sm leading-7 text-[#5b5649]">
                         {item.notes.join(" · ")}
                       </div>
                     ) : null}
 
-                    <button
-                      className="mt-4 rounded-full border border-[#cfc3aa] px-4 py-2 text-sm text-[#31463b]"
-                      onClick={() => void saveItemBody(item.id)}
-                      disabled={submitting}
-                    >
-                      保存当前文案
-                    </button>
+                    <div className="mt-4 flex flex-wrap gap-3">
+                      {item.mediaType !== "video_script" ? (
+                        <button
+                          className="rounded-full border border-[#cfc3aa] px-4 py-2 text-sm text-[#31463b]"
+                          onClick={() => void generateItemImages(item.id)}
+                          disabled={submitting}
+                        >
+                          {item.spec.generatedAssets?.length ? "重新生成图像" : "生成图像"}
+                        </button>
+                      ) : null}
+                      <button
+                        className="rounded-full border border-[#cfc3aa] px-4 py-2 text-sm text-[#31463b]"
+                        onClick={() => void saveItemBody(item.id)}
+                        disabled={submitting}
+                      >
+                        保存当前文案
+                      </button>
+                    </div>
                   </article>
                 );
               })}

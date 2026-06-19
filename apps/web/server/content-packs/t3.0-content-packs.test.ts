@@ -9,12 +9,14 @@ import {
   applyContentPackChatUpdate,
   createContentPackGenerationRequest,
   exportContentPack,
+  generateContentItemImageAssets,
   getContentPackDetail,
   listPlatformRules,
   markContentItemPublished,
   unmarkContentItemPublished,
   updateContentItem,
 } from "@/server/content-packs/service";
+import { getTenantObjectBuffer } from "@/server/storage/object-store";
 
 const prisma = getPrismaClient();
 const originalFetch = globalThis.fetch;
@@ -326,6 +328,44 @@ describe("T3.0 content packs", () => {
     expect(
       updatedItem.items.find((item) => item.id === linkedinAfterChat!.id)?.body,
     ).toContain("Final manual adjustment");
+
+    const withImages = await generateContentItemImageAssets({
+      tenantContext,
+      itemId: linkedinAfterChat!.id,
+      requestedByUserId: tenantContext.userId,
+      input: {
+        mode: "text_to_image",
+      },
+    });
+    const imageItem = withImages.items.find((item) => item.id === linkedinAfterChat!.id);
+    const generatedAssets = Array.isArray(imageItem?.spec.generatedAssets)
+      ? imageItem.spec.generatedAssets
+      : [];
+
+    expect(generatedAssets).toHaveLength(2);
+    expect(
+      generatedAssets.every(
+        (asset) =>
+          typeof asset.previewUrl === "string" &&
+          asset.previewUrl.startsWith("/api/files/"),
+      ),
+    ).toBe(true);
+
+    const firstFileId = String(generatedAssets[0]?.fileId ?? "");
+    const generatedFile = await prisma.file.findUniqueOrThrow({
+      where: {
+        id: firstFileId,
+      },
+      select: {
+        objectKey: true,
+      },
+    });
+    const generatedBuffer = await getTenantObjectBuffer({
+      tenantId: tenantContext.tenantId,
+      objectKey: generatedFile.objectKey,
+    });
+
+    expect(generatedBuffer.toString("utf8")).toContain("<svg");
 
     const published = await markContentItemPublished({
       tenantContext,

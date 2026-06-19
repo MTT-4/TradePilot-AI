@@ -1,10 +1,13 @@
 import { execFile as execFileCallback } from "node:child_process";
+import { createHash, randomUUID } from "node:crypto";
 import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { promisify } from "node:util";
 import {
   ContentPackStatus,
+  FileKind,
+  FileSourceType,
   JobType,
   KnowledgeSensitivity,
   LocaleCode,
@@ -23,6 +26,7 @@ import { getTenantPrisma } from "@/server/db/tenant-prisma";
 import { enqueueTenantJob } from "@/server/jobs/service";
 import { hybridSearchKnowledgeChunks } from "@/server/kb/service";
 import { createModelGateway } from "@/server/model-gateway";
+import { putTenantObject } from "@/server/storage/object-store";
 import { createTrackingLink } from "@/server/tracking/service";
 
 const execFile = promisify(execFileCallback);
@@ -60,6 +64,14 @@ const contentItemPatchSchema = z.object({
   ownerUserId: z.string().min(1).nullable().optional(),
 });
 
+const contentItemImageGenerationSchema = z.object({
+  mode: z
+    .enum(["text_to_image", "image_to_image", "background_swap"])
+    .default("text_to_image"),
+  backgroundStyle: z.string().trim().min(1).max(120).optional(),
+  referenceLabel: z.string().trim().min(1).max(120).optional(),
+});
+
 const modelPackItemSchema = z.object({
   platform: z.nativeEnum(Platform),
   title: z.string().trim().min(1).max(180),
@@ -83,6 +95,9 @@ type ApiPlatform = z.infer<typeof apiPlatformSchema>;
 type ContentPackGenerateInput = z.infer<typeof contentPackGenerateSchema>;
 type ContentPackChatInput = z.infer<typeof contentPackChatMessageSchema>;
 type ContentItemPatchInput = z.infer<typeof contentItemPatchSchema>;
+type ContentItemImageGenerationInput = z.infer<
+  typeof contentItemImageGenerationSchema
+>;
 type ModelPackItem = z.infer<typeof modelPackItemSchema>;
 
 type PlatformRuleDefaults = {
@@ -310,6 +325,95 @@ function buildResolvedTrackingUrl(trackingLink: {
   }
 
   return url.toString();
+}
+
+function parseDimensions(dimensions: string | undefined) {
+  const matched = dimensions?.match(/(\d{2,5})\s*x\s*(\d{2,5})/i);
+
+  if (!matched) {
+    return {
+      width: 1080,
+      height: 1080,
+    };
+  }
+
+  return {
+    width: Number(matched[1]),
+    height: Number(matched[2]),
+  };
+}
+
+function escapeSvgText(value: string) {
+  return value
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
+function buildGeneratedImageSvg(params: {
+  companyName: string;
+  platformLabel: string;
+  title: string;
+  coverHeadline: string;
+  prompt: string;
+  visualDirection: string;
+  backgroundStyle?: string;
+  referenceLabel?: string;
+  primaryColor: string;
+  secondaryColor: string;
+  width: number;
+  height: number;
+  variant: "primary" | "cover";
+  mode: ContentItemImageGenerationInput["mode"];
+}) {
+  const headline =
+    params.variant === "cover" ? params.coverHeadline : params.title;
+  const secondaryLine =
+    params.variant === "cover"
+      ? params.title
+      : `Prompt: ${clampText(params.prompt, 80)}`;
+  const footer =
+    params.mode === "background_swap"
+      ? `Background swap · ${params.backgroundStyle ?? "brand scene"}`
+      : params.mode === "image_to_image"
+        ? `Image-to-image · ${params.referenceLabel ?? "reference guided"}`
+        : `Text-to-image · ${params.visualDirection}`;
+  const paddedWidth = Math.max(180, params.width - 120);
+  const bodyY = Math.max(240, Math.round(params.height * 0.58));
+  const footerY = Math.max(bodyY + 110, params.height - 90);
+
+  return `<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="${params.width}" height="${params.height}" viewBox="0 0 ${params.width} ${params.height}">
+  <defs>
+    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="${params.primaryColor}"/>
+      <stop offset="100%" stop-color="${params.secondaryColor}"/>
+    </linearGradient>
+  </defs>
+  <rect width="${params.width}" height="${params.height}" rx="48" fill="url(#bg)"/>
+  <circle cx="${Math.round(params.width * 0.84)}" cy="${Math.round(params.height * 0.18)}" r="${Math.round(Math.min(params.width, params.height) * 0.14)}" fill="rgba(255,255,255,0.12)"/>
+  <circle cx="${Math.round(params.width * 0.2)}" cy="${Math.round(params.height * 0.82)}" r="${Math.round(Math.min(params.width, params.height) * 0.16)}" fill="rgba(255,255,255,0.08)"/>
+  <rect x="60" y="54" rx="999" ry="999" width="${Math.min(360, params.width - 120)}" height="48" fill="rgba(255,255,255,0.18)"/>
+  <text x="84" y="86" font-size="24" font-family="Helvetica, Arial, sans-serif" fill="#ffffff">${escapeSvgText(params.companyName)} · ${escapeSvgText(params.platformLabel)}</text>
+  <text x="60" y="${Math.max(180, Math.round(params.height * 0.3))}" font-size="${params.variant === "cover" ? 58 : 52}" font-weight="700" font-family="Helvetica, Arial, sans-serif" fill="#ffffff">
+    <tspan x="60" dy="0">${escapeSvgText(clampText(headline, 48))}</tspan>
+  </text>
+  <text x="60" y="${bodyY}" font-size="28" font-family="Helvetica, Arial, sans-serif" fill="rgba(255,255,255,0.94)">
+    <tspan x="60" dy="0">${escapeSvgText(clampText(secondaryLine, 68))}</tspan>
+    <tspan x="60" dy="42">${escapeSvgText(clampText(params.visualDirection, 72))}</tspan>
+  </text>
+  <rect x="60" y="${footerY - 44}" rx="24" ry="24" width="${paddedWidth}" height="64" fill="rgba(20,24,20,0.18)"/>
+  <text x="86" y="${footerY}" font-size="22" font-family="Helvetica, Arial, sans-serif" fill="#ffffff">${escapeSvgText(clampText(footer, 88))}</text>
+</svg>`;
+}
+
+function buildGeneratedAssetObjectKey(params: {
+  itemId: string;
+  variant: "primary" | "cover";
+}) {
+  return `content-packs/generated/${params.itemId}/${params.variant}-${randomUUID()}.svg`;
 }
 
 async function createAuditLog(params: {
@@ -1620,8 +1724,10 @@ async function getContentItemRecord(params: {
       id: true,
       contentPackId: true,
       platform: true,
+      mediaType: true,
       title: true,
       body: true,
+      spec: true,
       publishStatus: true,
       plannedAt: true,
       publishedAt: true,
@@ -1683,6 +1789,156 @@ export async function updateContentItem(params: {
       bodyChanged: input.body !== undefined,
       plannedAtChanged: input.plannedAt !== undefined,
       ownerChanged: input.ownerUserId !== undefined,
+    },
+  });
+
+  return getContentPackDetail(params.tenantContext, item.contentPackId);
+}
+
+export async function generateContentItemImageAssets(params: {
+  tenantContext: TenantContext;
+  itemId: string;
+  requestedByUserId?: string;
+  input?: ContentItemImageGenerationInput;
+}) {
+  const input = contentItemImageGenerationSchema.parse(params.input ?? {});
+  const item = await getContentItemRecord({
+    tenantContext: params.tenantContext,
+    itemId: params.itemId,
+  });
+
+  if (!item) {
+    throw new ApiError(404, "NOT_FOUND", "Content item not found.");
+  }
+
+  if (item.mediaType === MediaType.VIDEO_SCRIPT) {
+    throw new ApiError(
+      409,
+      "CONFLICT",
+      "Video script items are limited to script, storyboard, and cover planning in V1.0.",
+    );
+  }
+
+  const tenantPrisma = getTenantPrisma(params.tenantContext);
+  const normalizedSpec = serializeContentItemSpec(item.spec);
+  const brandKit = await getLatestBrandKit(params.tenantContext);
+  const { width, height } = parseDimensions(
+    typeof normalizedSpec.dimensions === "string"
+      ? normalizedSpec.dimensions
+      : undefined,
+  );
+  const companyName = brandKit?.companyName ?? "TradePilot";
+  const primaryColor = brandKit?.primaryColor ?? "#0C5C56";
+  const secondaryColor = brandKit?.secondaryColor ?? "#E9F4F2";
+  const prompt =
+    typeof normalizedSpec.imagePrompt === "string"
+      ? normalizedSpec.imagePrompt
+      : item.body ?? item.title ?? PLATFORM_LABELS[item.platform];
+  const visualDirection =
+    typeof normalizedSpec.visualDirection === "string"
+      ? normalizedSpec.visualDirection
+      : "industrial B2B visual system";
+  const coverHeadline =
+    typeof normalizedSpec.coverHeadline === "string" && normalizedSpec.coverHeadline.trim()
+      ? normalizedSpec.coverHeadline
+      : item.title ?? PLATFORM_LABELS[item.platform];
+  const variants: Array<"primary" | "cover"> = ["primary", "cover"];
+  const nextAssets: Array<Record<string, unknown>> = [];
+
+  for (const variant of variants) {
+    const svg = buildGeneratedImageSvg({
+      companyName,
+      platformLabel: PLATFORM_LABELS[item.platform],
+      title: item.title ?? PLATFORM_LABELS[item.platform],
+      coverHeadline,
+      prompt,
+      visualDirection,
+      backgroundStyle: input.backgroundStyle,
+      referenceLabel: input.referenceLabel,
+      primaryColor,
+      secondaryColor,
+      width,
+      height,
+      variant,
+      mode: input.mode,
+    });
+    const objectKey = buildGeneratedAssetObjectKey({
+      itemId: item.id,
+      variant,
+    });
+    const buffer = Buffer.from(svg, "utf8");
+    const stored = await putTenantObject({
+      tenantId: params.tenantContext.tenantId,
+      objectKey,
+      body: buffer,
+      contentType: "image/svg+xml",
+    });
+    const file = await tenantPrisma.file.create({
+      data: {
+        tenantId: params.tenantContext.tenantId,
+        uploadedByUserId: params.requestedByUserId,
+        sourceType: FileSourceType.GENERATED,
+        kind: FileKind.IMAGE,
+        originalName: `${normalizeSlugPart(item.title ?? PLATFORM_LABELS[item.platform]) || item.id}-${variant}.svg`,
+        mimeType: "image/svg+xml",
+        sizeBytes: buffer.byteLength,
+        bucket: stored.bucket,
+        objectKey,
+        checksum: createHash("sha256").update(buffer).digest("hex"),
+      },
+      select: {
+        id: true,
+      },
+    });
+
+    nextAssets.push({
+      id: randomUUID(),
+      fileId: file.id,
+      variant,
+      mode: input.mode,
+      width,
+      height,
+      mimeType: "image/svg+xml",
+      previewUrl: `/api/files/${file.id}`,
+      createdAt: new Date().toISOString(),
+      backgroundStyle: input.backgroundStyle ?? null,
+      referenceLabel: input.referenceLabel ?? null,
+    });
+  }
+
+  const existingAssets = Array.isArray(normalizedSpec.generatedAssets)
+    ? normalizedSpec.generatedAssets.filter(
+        (entry) =>
+          !entry ||
+          typeof entry !== "object" ||
+          !("variant" in entry) ||
+          !variants.includes(String(entry.variant) as "primary" | "cover"),
+      )
+    : [];
+
+  await tenantPrisma.contentItem.update({
+    where: {
+      id: params.itemId,
+    },
+    data: {
+      spec: {
+        ...normalizedSpec,
+        generatedAssets: [...existingAssets, ...nextAssets],
+        generatedImageMode: input.mode,
+        generatedImageUpdatedAt: new Date().toISOString(),
+      },
+    },
+  });
+
+  await createAuditLog({
+    tenantId: params.tenantContext.tenantId,
+    actorUserId: params.requestedByUserId,
+    action: "content_item_generated_image_assets",
+    entityType: "content_item",
+    entityId: params.itemId,
+    metadata: {
+      mode: input.mode,
+      generatedVariants: variants,
     },
   });
 

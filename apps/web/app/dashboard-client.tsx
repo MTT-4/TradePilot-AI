@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { HitlAction } from "@/app/_components/hitl-action";
 import {
@@ -127,11 +128,39 @@ async function fetchWorkspaceData(params: {
   } satisfies WorkspaceData;
 }
 
+type LoopNode = {
+  title: string;
+  cx: number;
+  cy: number;
+  labelX: number;
+  labelY: number;
+  anchor: "start" | "middle" | "end";
+  tone: "teal" | "amber" | "local";
+  href: string;
+};
+
+const LOOP_NODES: LoopNode[] = [
+  { title: "知识库", cx: 160, cy: 40, labelX: 160, labelY: 26, anchor: "middle", tone: "teal", href: "/kb/reviews" },
+  { title: "建站", cx: 245, cy: 75, labelX: 270, labelY: 70, anchor: "start", tone: "teal", href: "/sites" },
+  { title: "内容", cx: 280, cy: 160, labelX: 293, labelY: 164, anchor: "start", tone: "teal", href: "/design" },
+  { title: "发布", cx: 245, cy: 245, labelX: 268, labelY: 256, anchor: "start", tone: "amber", href: "/design" },
+  { title: "询盘", cx: 160, cy: 280, labelX: 160, labelY: 302, anchor: "middle", tone: "amber", href: "/crm" },
+  { title: "CRM", cx: 75, cy: 245, labelX: 52, labelY: 256, anchor: "end", tone: "teal", href: "/crm" },
+  { title: "首响", cx: 40, cy: 160, labelX: 27, labelY: 164, anchor: "end", tone: "local", href: "/hitl" },
+  { title: "反哺", cx: 75, cy: 75, labelX: 52, labelY: 70, anchor: "end", tone: "teal", href: "/crm" },
+];
+
+const TONE_FILL: Record<LoopNode["tone"], string> = {
+  teal: "var(--teal)",
+  amber: "var(--amber)",
+  local: "var(--local)",
+};
+
 export function DashboardClient() {
+  const router = useRouter();
   const [me, setMe] = useState<MeResponse | null>(null);
   const [selectedTenantId, setSelectedTenantId] = useState("");
   const [summary, setSummary] = useState<DashboardSummary | null>(null);
-  const [notifications, setNotifications] = useState<NotificationsResponse | null>(null);
   const [hitl, setHitl] = useState<HitlTaskItem[]>([]);
   const [leads, setLeads] = useState<CrmLead[]>([]);
   const [range, setRange] = useState<"day" | "week" | "month">("week");
@@ -156,7 +185,6 @@ export function DashboardClient() {
     });
 
     setSummary(payload.summary);
-    setNotifications(payload.notifications);
     setHitl(payload.hitl);
     setLeads(payload.leads);
     setLoading(false);
@@ -214,7 +242,6 @@ export function DashboardClient() {
 
         setError(null);
         setSummary(payload.summary);
-        setNotifications(payload.notifications);
         setHitl(payload.hitl);
         setLeads(payload.leads);
       })
@@ -234,323 +261,334 @@ export function DashboardClient() {
     };
   }, [currentMembership?.role, range, selectedTenantId]);
 
-  const loopNodes = [
-    {
-      title: "询盘",
-      value: summary?.inquiriesCount ?? 0,
-      detail: "新询盘进入 CRM",
-      href: "/crm",
-    },
-    {
-      title: "线索",
-      value: summary?.loopStats.leadsCount ?? 0,
-      detail: "线索归因到内容与来源",
-      href: "/crm",
-    },
-    {
-      title: "商机",
-      value: summary?.loopStats.opportunitiesCount ?? 0,
-      detail: "销售推进到商机阶段",
-      href: "/crm",
-    },
-    {
-      title: "首响",
-      value: summary?.loopStats.repliesSentCount ?? 0,
-      detail: "AI 草稿经 HITL 后发送",
-      href: "/hitl",
-    },
-  ];
-
-  const pendingQueue = hitl.slice(0, 6);
+  const pendingQueue = hitl.slice(0, 4);
+  const inquiriesCount = summary?.inquiriesCount ?? 0;
+  const pendingPublish = summary?.pendingPublish ?? 0;
+  const replyMedian = summary?.replyMedianMinutes ?? 0;
+  const totalPendingHitl = (summary?.pendingHitl ?? []).reduce(
+    (sum, item) => sum + item.count,
+    0,
+  );
 
   return (
-    <main className="min-h-screen bg-[radial-gradient(circle_at_top_right,_rgba(35,96,75,0.18),_transparent_28%),linear-gradient(180deg,#fbf7ef_0%,#efe6d3_100%)] px-4 py-6 md:px-8">
-      <div className="mx-auto flex max-w-7xl flex-col gap-6">
-        <section className="rounded-[30px] border border-[#ddd3bd] bg-white/92 p-6 shadow-[0_24px_100px_rgba(50,41,22,0.08)]">
-          <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
-            <div>
-              <p className="font-mono text-xs uppercase tracking-[0.28em] text-[#2c6d56]">
-                Workspace / T6.1
-              </p>
-              <h1 className="mt-3 text-3xl font-semibold tracking-tight text-[#1f241f] md:text-5xl">
-                海外营销工作台
-              </h1>
-              <p className="mt-3 max-w-3xl text-sm leading-7 text-[#655f52]">
-                询盘、内容、审批、首响已接到真实数据。所有数字、闭环节点和智能体卡片都可以直接下钻到对应模块。
-              </p>
-            </div>
-            <div className="flex flex-wrap items-center gap-3">
-              <div className="rounded-full border border-[#ddd3bd] bg-[#fffaf0] px-4 py-2 text-sm text-[#1f241f]">
-                铃铛 {notifications?.unreadCount ?? 0}
-              </div>
-              <select
-                className="rounded-full border border-[#ddd3bd] bg-white px-4 py-2 text-sm"
-                value={range}
-                onChange={(event) => {
-                  setLoading(true);
-                  setRange(event.target.value as "day" | "week" | "month");
-                }}
-              >
-                <option value="day">近 24 小时</option>
-                <option value="week">近 7 天</option>
-                <option value="month">近 30 天</option>
-              </select>
-              <select
-                className="rounded-full border border-[#ddd3bd] bg-white px-4 py-2 text-sm"
-                value={selectedTenantId}
-                onChange={(event) => {
-                  setLoading(true);
-                  setSelectedTenantId(event.target.value);
-                }}
-              >
-                {me?.memberships.map((membership) => (
-                  <option key={membership.tenantId} value={membership.tenantId}>
-                    {membership.tenantName}
-                  </option>
-                ))}
-              </select>
-            </div>
+    <>
+      <div className="head-row">
+        <div>
+          <div className="eyebrow">闭环 · 实时</div>
+          <h2 className="sec" style={{ marginTop: 4 }}>
+            海外营销工作台
+          </h2>
+          <div className="loop-hint">
+            {loading ? "同步真实数据中…" : "点击任意节点 / 数据进入对应模块"}
           </div>
-        </section>
-
-        {error ? (
-          <section className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
-            {error}
-          </section>
-        ) : null}
-
-        <section className="grid gap-4 lg:grid-cols-[1.2fr_0.8fr]">
-          <div className="rounded-[28px] border border-[#ddd3bd] bg-white/90 p-5">
-            <div className="mb-4 flex items-center justify-between">
-              <h2 className="text-lg font-semibold text-[#1f241f]">业务闭环</h2>
-              <span className="text-xs text-[#6a6457]">
-                {loading ? "同步中…" : "点击节点下钻"}
-              </span>
-            </div>
-            <div className="grid gap-3 md:grid-cols-4">
-              {loopNodes.map((node, index) => (
-                <Link
-                  key={node.title}
-                  href={node.href}
-                  className="group rounded-[24px] border border-[#ece5d3] bg-[#fffdf8] p-4 transition hover:border-[#2c6d56] hover:bg-[#f3f8f3]"
-                >
-                  <div className="text-xs uppercase tracking-[0.22em] text-[#7b745f]">
-                    Step 0{index + 1}
-                  </div>
-                  <div className="mt-4 text-3xl font-semibold text-[#1f241f]">
-                    {node.value}
-                  </div>
-                  <div className="mt-2 text-base font-medium text-[#1f241f]">
-                    {node.title}
-                  </div>
-                  <div className="mt-2 text-sm leading-6 text-[#655f52]">
-                    {node.detail}
-                  </div>
-                </Link>
+        </div>
+        <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+          <select
+            className="btn ghost sm"
+            value={range}
+            onChange={(event) => {
+              setLoading(true);
+              setRange(event.target.value as "day" | "week" | "month");
+            }}
+          >
+            <option value="day">近 24 小时</option>
+            <option value="week">近 7 天</option>
+            <option value="month">近 30 天</option>
+          </select>
+          {me && me.memberships.length > 0 ? (
+            <select
+              className="btn ghost sm"
+              value={selectedTenantId}
+              onChange={(event) => {
+                setLoading(true);
+                setSelectedTenantId(event.target.value);
+              }}
+            >
+              {me.memberships.map((membership) => (
+                <option key={membership.tenantId} value={membership.tenantId}>
+                  {membership.tenantName}
+                </option>
               ))}
-            </div>
-          </div>
-
-          <div className="rounded-[28px] border border-[#ddd3bd] bg-white/90 p-5">
-            <div className="mb-4 flex items-center justify-between">
-              <h2 className="text-lg font-semibold text-[#1f241f]">通知中心</h2>
-              <Link className="text-sm text-[#2c6d56]" href="/hitl">
-                进入 HITL
-              </Link>
-            </div>
-            <div className="space-y-3">
-              {notifications?.items.slice(0, 5).map((item) => (
-                <Link
-                  key={item.id}
-                  href={item.linkUrl ?? "/hitl"}
-                  className="block rounded-2xl border border-[#ece5d3] bg-[#fffdf8] p-4 transition hover:border-[#2c6d56]"
-                >
-                  <div className="flex items-center justify-between gap-3">
-                    <div className="font-medium text-[#1f241f]">{item.title}</div>
-                    <span className="text-xs text-[#6a6457]">{formatTime(item.createdAt)}</span>
-                  </div>
-                  <div className="mt-2 text-sm leading-6 text-[#655f52]">
-                    {item.body ?? "点击查看详情"}
-                  </div>
-                </Link>
-              ))}
-              {!notifications?.items.length ? (
-                <div className="rounded-2xl border border-dashed border-[#ddd3bd] bg-[#faf6eb] px-4 py-5 text-sm text-[#6a6457]">
-                  暂无通知。
-                </div>
-              ) : null}
-            </div>
-          </div>
-        </section>
-
-        <section className="grid gap-4 md:grid-cols-3">
-          <Link
-            href="/crm"
-            className="rounded-[28px] border border-[#ddd3bd] bg-white/90 p-5 transition hover:border-[#2c6d56]"
-          >
-            <div className="text-xs uppercase tracking-[0.22em] text-[#7b745f]">本周询盘</div>
-            <div className="mt-4 text-4xl font-semibold text-[#1f241f]">
-              {summary?.inquiriesCount ?? 0}
-            </div>
-            <div className="mt-2 text-sm text-[#655f52]">点击进入 CRM 查看询盘与归因。</div>
-          </Link>
-          <Link
-            href="/design"
-            className="rounded-[28px] border border-[#ddd3bd] bg-white/90 p-5 transition hover:border-[#2c6d56]"
-          >
-            <div className="text-xs uppercase tracking-[0.22em] text-[#7b745f]">内容待发</div>
-            <div className="mt-4 text-4xl font-semibold text-[#1f241f]">
-              {summary?.pendingPublish ?? 0}
-            </div>
-            <div className="mt-2 text-sm text-[#655f52]">点击进入设计队列发起或查看发布审批。</div>
-          </Link>
-          <Link
-            href="/hitl"
-            className="rounded-[28px] border border-[#ddd3bd] bg-white/90 p-5 transition hover:border-[#2c6d56]"
-          >
-            <div className="text-xs uppercase tracking-[0.22em] text-[#7b745f]">首响中位耗时</div>
-            <div className="mt-4 text-4xl font-semibold text-[#1f241f]">
-              {summary?.replyMedianMinutes ?? 0}
-              <span className="ml-1 text-lg text-[#6a6457]">分钟</span>
-            </div>
-            <div className="mt-2 text-sm text-[#655f52]">点击进入审批中心查看待发送首响。</div>
-          </Link>
-        </section>
-
-        <section className="grid gap-4 lg:grid-cols-[1fr_1fr_1fr]">
-          <Link
-            href="/sites"
-            className="rounded-[28px] border border-[#ddd3bd] bg-[#1f241f] p-5 text-[#f7f3ea] transition hover:translate-y-[-2px]"
-          >
-            <div className="text-xs uppercase tracking-[0.22em] text-[#c9ebe6]">Site Agent</div>
-            <div className="mt-4 text-2xl font-semibold">
-              {countPending(summary, "site_publish")} 条站点审批
-            </div>
-            <div className="mt-2 text-sm leading-6 text-[#ddd3bd]">
-              站点上线和补全内容确认都从这里落地。
-            </div>
-          </Link>
-          <Link
-            href="/design"
-            className="rounded-[28px] border border-[#ddd3bd] bg-white/90 p-5 transition hover:border-[#2c6d56]"
-          >
-            <div className="text-xs uppercase tracking-[0.22em] text-[#7b745f]">Content Agent</div>
-            <div className="mt-4 text-2xl font-semibold text-[#1f241f]">
-              {countPending(summary, "content_publish")} 条内容审批
-            </div>
-            <div className="mt-2 text-sm leading-6 text-[#655f52]">
-              内容包发布改为先审批，再进入已发状态。
-            </div>
-          </Link>
-          <Link
-            href="/hitl"
-            className="rounded-[28px] border border-[#ddd3bd] bg-white/90 p-5 transition hover:border-[#2c6d56]"
-          >
-            <div className="text-xs uppercase tracking-[0.22em] text-[#7b745f]">Reply Agent</div>
-            <div className="mt-4 text-2xl font-semibold text-[#1f241f]">
-              {countPending(summary, "reply_send")} 条首响审批
-            </div>
-            <div className="mt-2 text-sm leading-6 text-[#655f52]">
-              询盘首响统一经过 HITL 批准后发送。
-            </div>
-          </Link>
-        </section>
-
-        <section className="grid gap-4 lg:grid-cols-[1fr_0.95fr]">
-          <div className="rounded-[28px] border border-[#ddd3bd] bg-white/90 p-5">
-            <div className="mb-4 flex items-center justify-between">
-              <h2 className="text-lg font-semibold text-[#1f241f]">待确认队列</h2>
-              <Link className="text-sm text-[#2c6d56]" href="/hitl">
-                查看全部
-              </Link>
-            </div>
-            <div className="space-y-3">
-              {pendingQueue.map((task) => (
-                <div key={task.id} className="rounded-2xl border border-[#ece5d3] bg-[#fffdf8] p-4">
-                  <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-                    <div>
-                      <Link href={resolveTaskHref(task)} className="font-medium text-[#1f241f]">
-                        {formatTaskType(task.type)}
-                      </Link>
-                      <div className="mt-1 text-sm text-[#655f52]">
-                        {formatTaskDetail(task)} · {formatTime(task.createdAt)}
-                      </div>
-                    </div>
-                    {canApproveTask(currentMembership?.role, task.type) ? (
-                      <HitlAction
-                        tenantId={selectedTenantId}
-                        endpoint={`/api/hitl/${task.id}/approve`}
-                        idleLabel="批准"
-                        busyLabel="审批中…"
-                        onError={(message) => setError(message || null)}
-                        onSuccess={() => refreshWorkspace()}
-                      />
-                    ) : (
-                      <Link
-                        href={resolveTaskHref(task)}
-                        className="rounded-full border border-[#ddd3bd] px-4 py-2 text-sm text-[#1f241f]"
-                      >
-                        去查看
-                      </Link>
-                    )}
-                  </div>
-                </div>
-              ))}
-              {!pendingQueue.length ? (
-                <div className="rounded-2xl border border-dashed border-[#ddd3bd] bg-[#faf6eb] px-4 py-5 text-sm text-[#6a6457]">
-                  当前没有待确认任务。
-                </div>
-              ) : null}
-            </div>
-          </div>
-
-          <div className="rounded-[28px] border border-[#ddd3bd] bg-white/90 p-5">
-            <div className="mb-4 flex items-center justify-between">
-              <h2 className="text-lg font-semibold text-[#1f241f]">来源归因</h2>
-              <Link className="text-sm text-[#2c6d56]" href="/crm">
-                查看 CRM
-              </Link>
-            </div>
-            <div className="space-y-3">
-              {summary?.sourceAttribution.slice(0, 6).map((item) => (
-                <Link
-                  key={`${item.platform}-${item.content}`}
-                  href="/crm"
-                  className="flex items-center justify-between gap-4 rounded-2xl border border-[#ece5d3] bg-[#fffdf8] p-4 transition hover:border-[#2c6d56]"
-                >
-                  <div>
-                    <div className="font-medium text-[#1f241f]">
-                      {item.platform.toUpperCase()} · {item.content}
-                    </div>
-                    <div className="mt-1 text-sm text-[#655f52]">询盘已归因到具体平台和内容。</div>
-                  </div>
-                  <div className="text-2xl font-semibold text-[#1f241f]">{item.count}</div>
-                </Link>
-              ))}
-              {!summary?.sourceAttribution.length && leads.length > 0
-                ? leads.map((lead) => (
-                    <Link
-                      key={lead.id}
-                      href="/crm"
-                      className="block rounded-2xl border border-[#ece5d3] bg-[#fffdf8] p-4 transition hover:border-[#2c6d56]"
-                    >
-                      <div className="font-medium text-[#1f241f]">{lead.companyName}</div>
-                      <div className="mt-1 text-sm text-[#655f52]">
-                        {(lead.sourceAttribution.platform ?? "unknown").toUpperCase()} ·{" "}
-                        {lead.sourceAttribution.contentTitle ?? "未绑定内容"}
-                      </div>
-                    </Link>
-                  ))
-                : null}
-              {!summary?.sourceAttribution.length && !leads.length ? (
-                <div className="rounded-2xl border border-dashed border-[#ddd3bd] bg-[#faf6eb] px-4 py-5 text-sm text-[#6a6457]">
-                  当前范围内还没有内容归因询盘。
-                </div>
-              ) : null}
-            </div>
-          </div>
-        </section>
+            </select>
+          ) : null}
+        </div>
       </div>
-    </main>
+
+      {error ? (
+        <div
+          className="card"
+          style={{
+            padding: "12px 16px",
+            marginBottom: 18,
+            borderColor: "var(--warn-soft)",
+            background: "var(--warn-soft)",
+            color: "var(--warn)",
+            fontSize: 13,
+          }}
+        >
+          {error}
+        </div>
+      ) : null}
+
+      <div className="dash-top">
+        <div className="card loop-card">
+          <div className="eyebrow">闭环 · 实时</div>
+          <h2 className="sec" style={{ marginTop: 4 }}>
+            你的出海获客闭环正在运转
+          </h2>
+          <div className="loop-hint">点击任意节点 / 数据，进入对应模块</div>
+          <div className="loop-wrap">
+            <svg className="loop-svg" viewBox="0 0 320 320">
+              <circle className="loop-track" cx="160" cy="160" r="120" />
+              <circle className="loop-flow" cx="160" cy="160" r="120" />
+              <g textAnchor="middle">
+                {LOOP_NODES.map((node) => (
+                  <g
+                    key={node.title}
+                    className="lnode"
+                    onClick={() => router.push(node.href)}
+                  >
+                    <circle cx={node.cx} cy={node.cy} r={5} fill={TONE_FILL[node.tone]} />
+                    <text
+                      className="loop-node"
+                      x={node.labelX}
+                      y={node.labelY}
+                      textAnchor={node.anchor}
+                      fill={node.tone === "teal" ? "var(--ink-2)" : TONE_FILL[node.tone]}
+                    >
+                      {node.title}
+                    </text>
+                  </g>
+                ))}
+                <text x="160" y="156" textAnchor="middle">
+                  <tspan
+                    style={{
+                      fontSize: "24px",
+                      fontFamily: "var(--font-mono)",
+                      fontWeight: 700,
+                      fill: "var(--teal-dark)",
+                    }}
+                  >
+                    {inquiriesCount}
+                  </tspan>
+                </text>
+                <text
+                  x="160"
+                  y="176"
+                  textAnchor="middle"
+                  style={{ fontSize: "11px", fill: "var(--ink-3)" }}
+                >
+                  本周询盘
+                </text>
+              </g>
+            </svg>
+            <div className="loop-legend">
+              <div className="lstat" onClick={() => router.push("/crm")}>
+                <div>
+                  <div className="n amber">{inquiriesCount}</div>
+                  <div className="l">本周询盘</div>
+                </div>
+                <div className="d">
+                  CRM
+                  <br />
+                  <span className="go">查看 →</span>
+                </div>
+              </div>
+              <div className="lstat" onClick={() => router.push("/design")}>
+                <div>
+                  <div className="n">{pendingPublish}</div>
+                  <div className="l">内容已产出 · 待发布</div>
+                </div>
+                <div className="d">
+                  待发
+                  <br />
+                  <span className="go">查看 →</span>
+                </div>
+              </div>
+              <div className="lstat" onClick={() => router.push("/hitl")}>
+                <div>
+                  <div className="n">{replyMedian}</div>
+                  <div className="l">AI 首响中位耗时（分钟）</div>
+                </div>
+                <div className="d">
+                  本地
+                  <br />
+                  <span className="go">查看 →</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div className="card hitl-card">
+          <div className="head-row" style={{ marginBottom: 8 }}>
+            <div>
+              <div className="eyebrow">待你确认</div>
+              <h3 style={{ fontSize: 16, marginTop: 3 }}>人工把关队列</h3>
+            </div>
+            <span className="badge manual">{totalPendingHitl} 待处理</span>
+          </div>
+          <div className="sub" style={{ marginBottom: 6 }}>
+            所有对外动作都要你点头才生效
+          </div>
+
+          {pendingQueue.map((task) => (
+            <div className="hitl-item" key={task.id}>
+              <div className="ic local">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
+                  <path d="M4 4h16v12H5.2L4 18z" />
+                </svg>
+              </div>
+              <div className="grow">
+                <div className="t">{formatTaskType(task.type)}</div>
+                <div className="m">
+                  {formatTaskDetail(task)} · {formatTime(task.createdAt)}
+                </div>
+              </div>
+              {canApproveTask(currentMembership?.role, task.type) ? (
+                <HitlAction
+                  tenantId={selectedTenantId}
+                  endpoint={`/api/hitl/${task.id}/approve`}
+                  idleLabel="批准"
+                  busyLabel="审批中…"
+                  onError={(message) => setError(message || null)}
+                  onSuccess={() => refreshWorkspace()}
+                />
+              ) : (
+                <Link className="btn ghost sm" href={resolveTaskHref(task)}>
+                  去查看
+                </Link>
+              )}
+            </div>
+          ))}
+
+          {pendingQueue.length === 0 ? (
+            <div className="empty" style={{ padding: "28px 12px" }}>
+              <div className="t">当前没有待确认任务</div>
+              <div className="s">智能体产出后会先进入这里等待你点头。</div>
+            </div>
+          ) : null}
+        </div>
+      </div>
+
+      <div className="head-row">
+        <div>
+          <div className="eyebrow">智能体</div>
+          <h3 style={{ fontSize: 16, marginTop: 3 }}>四个智能体正在为你工作</h3>
+        </div>
+      </div>
+      <div className="agent-grid" style={{ gridTemplateColumns: "repeat(4, 1fr)" }}>
+        <Link className="agent" href="/sites">
+          <div className="ai">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
+              <rect x="3" y="4" width="18" height="14" rx="2" />
+              <path d="M3 9h18" />
+            </svg>
+          </div>
+          <div className="an">建站专家</div>
+          <div className="ad">对话生成多语言落地页 · SEO/GEO</div>
+          <div className="as wait">● {countPending(summary, "site_publish")} 项待审批</div>
+        </Link>
+        <Link className="agent" href="/design">
+          <div className="ai">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
+              <path d="M12 3l2.4 5.4L20 9l-4 4 1 6-5-3-5 3 1-6-4-4 5.6-.6z" />
+            </svg>
+          </div>
+          <div className="an">设计师 / 选题</div>
+          <div className="ad">图文 · 视频脚本/分镜 · 内容包</div>
+          <div className="as wait">● {countPending(summary, "content_publish")} 项待发布</div>
+        </Link>
+        <Link className="agent" href="/design">
+          <span className="badge manual tag">手动·V1</span>
+          <div className="ai">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
+              <circle cx="12" cy="12" r="9" />
+              <path d="M3 12h18M12 3a13 13 0 0 1 0 18M12 3a13 13 0 0 0 0 18" />
+            </svg>
+          </div>
+          <div className="an">社媒运营</div>
+          <div className="ad">多平台适配 + 发布清单</div>
+          <div className="as idle">○ {pendingPublish} 条待发布</div>
+        </Link>
+        <Link className="agent lo" href="/hitl">
+          <span className="badge local tag">本地</span>
+          <div className="ai">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
+              <path d="M3 21v-2a4 4 0 0 1 4-4h6a4 4 0 0 1 4 4v2" />
+              <circle cx="10" cy="7" r="3" />
+            </svg>
+          </div>
+          <div className="an">AI 外贸业务员</div>
+          <div className="ad">询盘理解 · 多语言首响 · 跟进</div>
+          <div className="as wait">● {countPending(summary, "reply_send")} 项待发送</div>
+        </Link>
+      </div>
+
+      <div className="head-row" style={{ marginTop: 22 }}>
+        <div>
+          <div className="eyebrow">来源归因</div>
+          <h3 style={{ fontSize: 16, marginTop: 3 }}>询盘归因到平台与内容</h3>
+        </div>
+        <Link className="btn ghost sm" href="/crm">
+          查看 CRM
+        </Link>
+      </div>
+      <div className="card" style={{ padding: "10px 18px" }}>
+        {(summary?.sourceAttribution ?? []).slice(0, 6).map((item) => (
+          <Link
+            key={`${item.platform}-${item.content}`}
+            className="row-card"
+            href="/crm"
+          >
+            <div className="afi">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
+                <path d="M3 12h18M12 3a13 13 0 0 1 0 18M12 3a13 13 0 0 0 0 18" />
+              </svg>
+            </div>
+            <div className="grow">
+              <div className="nm">
+                {item.platform.toUpperCase()}
+                <span>{item.content}</span>
+              </div>
+              <div className="sub">询盘已归因到具体平台和内容</div>
+            </div>
+            <div className="mono" style={{ fontSize: 18, fontWeight: 700, color: "var(--teal-dark)" }}>
+              {item.count}
+            </div>
+          </Link>
+        ))}
+
+        {(summary?.sourceAttribution.length ?? 0) === 0 && leads.length > 0
+          ? leads.map((lead) => (
+              <Link key={lead.id} className="row-card" href="/crm">
+                <div className="afi">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
+                    <path d="M3 21v-2a4 4 0 0 1 4-4h6a4 4 0 0 1 4 4v2" />
+                    <circle cx="10" cy="7" r="3" />
+                  </svg>
+                </div>
+                <div className="grow">
+                  <div className="nm">
+                    {lead.companyName}
+                    <span>
+                      {(lead.sourceAttribution.platform ?? "unknown").toUpperCase()} ·{" "}
+                      {lead.sourceAttribution.contentTitle ?? "未绑定内容"}
+                    </span>
+                  </div>
+                  <div className="sub">{lead.country ?? "未知市场"}</div>
+                </div>
+              </Link>
+            ))
+          : null}
+
+        {(summary?.sourceAttribution.length ?? 0) === 0 && leads.length === 0 ? (
+          <div className="empty" style={{ padding: "32px 12px" }}>
+            <div className="t">当前范围内还没有内容归因询盘</div>
+            <div className="s">发布带追踪链接的内容后，询盘会自动归因到来源。</div>
+          </div>
+        ) : null}
+      </div>
+    </>
   );
 }

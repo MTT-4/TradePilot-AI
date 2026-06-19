@@ -1,0 +1,67 @@
+# 交接说明（给接手开发的 AI / 工程师）
+
+> 本文档记录最近一轮改动与后续开发约定，作为 Codex / 其他代理继续开发的共同上下文。
+> 配套参考：`docs/00_原始资料/TradePilot_完整高保真UI.html`（高保真原型）、`docs/00_原始资料/V1.0_开发任务清单与排期.md`（实现依据）。
+
+## 1. 最近改动（已提交到 `main`）
+
+```
+213c2bf chore(seed): 给演示用户设置真实 bcrypt 密码哈希
+b3c322c feat(ui): 按高保真原型改版 login/kb/sites/design/crm/hitl
+3396713 feat(ui): 接入原型设计系统 + 侧边栏框架(AppShell) + 工作台
+226b4e9 fix: 修复无语言站点列表崩溃 + 补充模型网关环境变量文档
+```
+
+## 2. 开始前请先做
+
+1. 确认同步：`git log --oneline -5` 应能看到以上提交；`git status` 应为干净。
+2. 如遇 `.git/index.lock` 报错：`rm -f .git/index.lock`；再 `rm -rf apps/web/tmp`（构建临时产物，已被 gitignore）。
+3. `npm install` 重装依赖（此前为在 Linux 沙箱跑测试，往 `node_modules` 加过原生二进制，重装即恢复干净）。
+4. 验证基线：`npm run lint` 与 `npm run typecheck` 必须通过（已确认通过）。
+   完整测试 `npm run test` 需先 `docker compose up -d` + `npm run prisma:migrate` + `npm run prisma:seed`。
+
+## 3. 已完成（不要重复做）
+
+- **设计系统**集中在 `apps/web/app/globals.css`：teal 主题 CSS 变量 + 组件类
+  （`card / btn / badge / st / stat-strip / kanban / pk(pack-grid) / row-card / hitl-item / loop / chat / pv-* / drop / fixes` 等）。
+  改样式优先复用这些类，不要再写一次性 Tailwind 硬编码颜色。
+- **共享框架** `apps/web/app/_components/app-shell.tsx`：深色侧边栏 + 顶栏，在 `layout.tsx` 里包裹所有页面；
+  `/login` 与 `/site/`（对外站点）会自动不套框架。导航高亮跟随路由，顶栏铃铛拉真实未读数。
+- **字体**：`layout.tsx` 用 next/font 接入 Space Grotesk / Inter / Space Mono，变量对应 globals.css 的 `--font-*`。
+- **已按原型改版的页面**：工作台 (`/`)、登录 (`/login`)、知识库 (`/kb/reviews`)、站点 (`/sites`)、
+  内容包 (`/design`)、CRM (`/crm`)、首响审批 (`/hitl`)。所有数据接线 / API 调用 / 权限判断均未改，只换外观。
+- **演示账号**（在 `prisma/seed.ts`，需重新 `npm run prisma:seed` 生效）：
+  - `owner-a@tradepilot.local` / `TradePilot@2026`（所有者 · 租户 A，未开 2FA，可直接登录）
+  - 另有 `sales-a` / `owner-b` / `sales-b`，密码相同。上线前务必改密码并按需启用 2FA。
+
+## 4. 待继续做（参照高保真原型）
+
+1. **尚未改版的页面**：
+   - 站点对话编辑 `apps/web/app/sites/[id]/chat/site-chat-client.tsx`
+   - 内容包对话 `apps/web/app/content-packs/[id]/chat/content-pack-chat-client.tsx`
+   - 建议用原型的 `.split` + `.chat`（chat-head / chat-body / msg / chips / chat-input）+ `.preview`（pv-bar / pv-body / langtab）样式。
+2. **原型里有、但项目暂无独立路由的模块**：发布清单、通知中心、设置（成员 / 品牌 / 模型 / 用量）。
+   按需新建路由并复用现有组件类（`tbl / mark / set-grid / set-nav / usebar` 等）。
+3. **对外站点页** `apps/web/app/site/[slug]/[locale]/page.tsx` 是客户访问的落地页，保持独立风格，不要套后台框架。
+
+## 5. 开发约定
+
+- 复用 `globals.css` 的组件类，避免重复造样式；新增通用样式也加到 globals.css。
+- 页面内容直接渲染即可——外层框架（侧边栏 + 顶栏 + `.content` 容器）由 AppShell 提供，**不要再加整页 `<main>` 背景**。
+- 保持每个页面原有的数据获取（`fetchCurrentMe` + `X-Tenant-Id` 头）、权限判断与 HITL 审批逻辑。
+- 隐私 / 安全红线：客户隐私数据（姓名、电话、询盘正文）只走本地 Qwen，绝不发往 OpenAI / Google；
+  多租户隔离统一在 `apps/web/server/db/tenant-prisma.ts`，新增模型注意 `tenantId` 注入。
+- 每完成一块：`npm run lint && npm run typecheck` 通过，尽量补 / 跑相关测试后再提交，提交信息写清改了什么。
+
+## 6. 环境与启动（本机 Mac）
+
+```bash
+nvm use
+cp .env.example .env          # 填好 OPENAI / GOOGLE 等密钥
+npm install
+docker compose up -d          # postgres(pgvector) + redis + minio
+npm run prisma:migrate
+npm run prisma:seed
+npm run dev                   # http://localhost:3100
+# 本地模型端点（llama.cpp）见 README：Qwen :8080 / bge-m3 :8082
+```

@@ -3,19 +3,13 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { HitlAction } from "@/app/_components/hitl-action";
+import {
+  fetchCurrentMe,
+  LoginRequiredError,
+  redirectToLogin,
+  type MeResponse,
+} from "@/app/_lib/auth-client";
 import { canEdit } from "@/app/_components/hitl-meta";
-
-type Membership = {
-  tenantId: string;
-  role: string;
-  status: string;
-  tenantName: string;
-};
-
-type MeResponse = {
-  memberships: Membership[];
-  currentTenant: Membership | null;
-};
 
 type DesignItem = {
   id: string;
@@ -75,13 +69,7 @@ export function DesignClient() {
 
     async function loadMe() {
       try {
-        const response = await fetch("/api/me");
-
-        if (!response.ok) {
-          throw new Error("请先登录并完成 2FA。");
-        }
-
-        const payload = (await response.json()) as MeResponse;
+        const payload = await fetchCurrentMe();
 
         if (!active) {
           return;
@@ -90,6 +78,11 @@ export function DesignClient() {
         setMe(payload);
         setSelectedTenantId(payload.currentTenant?.tenantId ?? payload.memberships[0]?.tenantId ?? "");
       } catch (loadError) {
+        if (loadError instanceof LoginRequiredError) {
+          redirectToLogin();
+          return;
+        }
+
         if (active) {
           setError(loadError instanceof Error ? loadError.message : "加载用户失败。");
           setLoading(false);

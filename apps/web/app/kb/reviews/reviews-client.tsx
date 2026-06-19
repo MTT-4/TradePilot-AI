@@ -1,26 +1,12 @@
 "use client";
 
 import { useEffect, useState } from "react";
-
-type Membership = {
-  tenantId: string;
-  role: string;
-  status: string;
-  tenantName: string;
-  tenantSlug: string;
-  defaultLocale: string;
-};
-
-type MeResponse = {
-  user: {
-    id: string;
-    email: string;
-    name: string;
-    twoFactorEnabled: boolean;
-  };
-  memberships: Membership[];
-  currentTenant: Membership | null;
-};
+import {
+  fetchCurrentMe,
+  LoginRequiredError,
+  redirectToLogin,
+  type MeResponse,
+} from "@/app/_lib/auth-client";
 
 type ReviewItem = {
   id: string;
@@ -114,13 +100,7 @@ export function ReviewsClient() {
 
     async function loadMe() {
       try {
-        const response = await fetch("/api/me");
-
-        if (!response.ok) {
-          throw new Error("请先登录并完成 2FA。");
-        }
-
-        const payload = (await response.json()) as MeResponse;
+        const payload = await fetchCurrentMe();
 
         if (!active) {
           return;
@@ -129,6 +109,11 @@ export function ReviewsClient() {
         setMe(payload);
         setSelectedTenantId(payload.currentTenant?.tenantId ?? payload.memberships[0]?.tenantId ?? "");
       } catch (loadError) {
+        if (loadError instanceof LoginRequiredError) {
+          redirectToLogin();
+          return;
+        }
+
         if (!active) {
           return;
         }

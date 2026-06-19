@@ -1680,10 +1680,14 @@ export async function listSiteProjects(tenantContext: TenantContext) {
 
   return {
     items: projects.map((project) => {
+      const briefLocales =
+        project.locales.length > 0
+          ? project.locales.map((item) => toApiLocale(item.locale))
+          : [toApiLocale(project.defaultLocale)];
       const brief = siteBriefSchema.parse({
         market: project.market ?? "Unknown Market",
         product: project.product ?? project.name,
-        locales: project.locales.map((item) => toApiLocale(item.locale)),
+        locales: briefLocales,
         style: "conversion focused",
         cta: "Request a quote",
       });

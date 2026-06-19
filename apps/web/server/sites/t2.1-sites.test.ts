@@ -1,8 +1,9 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { JobStatus, KnowledgeDocumentStatus } from "@prisma/client";
+import { JobStatus, KnowledgeDocumentStatus, LocaleCode, SiteStatus } from "@prisma/client";
 import { getEnv } from "@/lib/env";
 import { getTenantJobById, getJobQueue } from "@/server/jobs/service";
 import { closeJobWorker, startJobWorker } from "@/server/jobs/worker";
+import { getPrismaClient } from "@/server/db/prisma";
 import {
   createKnowledgeDocumentFromUpload,
   getActiveMembershipForEmail,
@@ -14,6 +15,7 @@ import {
   createSiteGenerationRequest,
   getPublicSiteLocalePageData,
   getSiteProjectDetail,
+  listSiteProjects,
   listHitlTasks,
   requestSitePublish,
   rollbackSiteProject,
@@ -866,4 +868,34 @@ describe("T2.1 site generation", () => {
     },
     20000,
   );
+
+  it("lists site projects even when a project has no locales yet", async () => {
+    const prisma = getPrismaClient();
+    const tag = `site-empty-locales-${Date.now()}`;
+    const project = await prisma.siteProject.create({
+      data: {
+        tenantId: tenantContext.tenantId,
+        createdByUserId: tenantContext.userId,
+        name: `Empty locales ${tag}`,
+        slug: `empty-locales-${tag}`,
+        market: "MENA",
+        product: "TS-75",
+        style: "conversion focused",
+        cta: "Request a quote",
+        defaultLocale: LocaleCode.EN,
+        status: SiteStatus.DRAFT,
+      },
+      select: {
+        id: true,
+      },
+    });
+
+    const listed = await listSiteProjects(tenantContext);
+    const created = listed.items.find((item) => item.id === project.id);
+
+    expect(created).toBeTruthy();
+    expect(created?.localeCount).toBe(0);
+    expect(created?.locales).toEqual([]);
+    expect(created?.defaultLocale).toBe("en");
+  });
 });

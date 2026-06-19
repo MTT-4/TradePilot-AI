@@ -2167,28 +2167,27 @@ function applyCandidateToSourceDraft(params: {
   draft: ModelDraft;
   candidate: AutofillCandidate;
 }) {
-  const sourceLocale = params.draft.locales[0];
-
-  if (!sourceLocale) {
+  if (params.draft.locales.length === 0) {
     throw new ApiError(500, "INTERNAL", "Missing source locale while applying autofill candidate.");
   }
 
   const sectionId = buildCandidateSectionId(params.candidate.id);
-  const nextSourceLocale: ModelLocaleDraft = {
-    ...sourceLocale,
-    sections: sourceLocale.sections.some((section) => section.id === sectionId)
-      ? sourceLocale.sections.map((section) =>
+  const nextLocales = params.draft.locales.map((localeDraft) => ({
+    ...localeDraft,
+    sections: localeDraft.sections.some((section) => section.id === sectionId)
+      ? localeDraft.sections.map((section) =>
           section.id === sectionId
             ? {
                 ...section,
                 heading: params.candidate.title,
                 body: params.candidate.body,
+                bullets: [params.candidate.summary],
                 sourceCitations: params.candidate.sourceCitations,
               }
             : section,
         )
       : [
-          ...sourceLocale.sections,
+          ...localeDraft.sections,
           {
             id: sectionId,
             heading: params.candidate.title,
@@ -2197,7 +2196,7 @@ function applyCandidateToSourceDraft(params: {
             sourceCitations: params.candidate.sourceCitations,
           },
         ],
-  };
+  })) satisfies ModelLocaleDraft[];
   const pageSlug =
     params.candidate.kind === "blog"
       ? buildAutofillPageSlug(params.candidate.title)
@@ -2246,7 +2245,7 @@ function applyCandidateToSourceDraft(params: {
 
   return {
     ...params.draft,
-    locales: [nextSourceLocale],
+    locales: nextLocales,
     pages: nextPages,
     citations: nextCandidates,
   } satisfies ModelDraft;
@@ -2495,15 +2494,8 @@ export async function approveHitlTask(params: {
     }
 
     const sourceDraft = applyCandidateToSourceDraft({
-      draft: {
-        ...draft,
-        locales: [draft.locales[0]],
-      },
+      draft,
       candidate,
-    });
-    const localizedDraft = await localizeDraft({
-      brief,
-      sourceDraft,
     });
     const nextSnapshot = {
       ...snapshot,
@@ -2523,7 +2515,7 @@ export async function approveHitlTask(params: {
       siteProjectId: payload.siteId,
       createdByUserId: params.approvedByUserId,
       brief,
-      draft: localizedDraft,
+      draft: sourceDraft,
       snapshot: nextSnapshot,
       note: `Autofill applied: ${candidate.title}`,
       auditAction: "site_draft_updated",

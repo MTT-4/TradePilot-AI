@@ -840,11 +840,20 @@ describe("T2.1 site generation", () => {
         ),
       ).toBe(true);
 
-      await approveHitlTask({
-        tenantContext,
-        hitlTaskId: task.hitlTaskId,
-        approvedByUserId: tenantContext.userId,
-      });
+      const originalFetchImpl = globalThis.fetch;
+      globalThis.fetch = (async () => {
+        throw new Error("translate should not be called during autofill approval");
+      }) as typeof fetch;
+
+      try {
+        await approveHitlTask({
+          tenantContext,
+          hitlTaskId: task.hitlTaskId,
+          approvedByUserId: tenantContext.userId,
+        });
+      } finally {
+        globalThis.fetch = originalFetchImpl;
+      }
 
       const afterApprove = await getSiteProjectDetail(tenantContext, queued.siteId);
       expect(afterApprove.project.status).toBe("published");

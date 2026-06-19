@@ -1037,6 +1037,38 @@ a {
   display: grid;
   place-items: center;
 }
+.chat-compose {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px;
+  border-top: 1px solid var(--line);
+  background: var(--surface);
+}
+.chat-textarea {
+  width: 100%;
+  min-height: 116px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 12px 13px;
+  font-family: inherit;
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--ink);
+  background: var(--surface-2);
+  resize: vertical;
+}
+.chat-textarea:focus {
+  outline: none;
+  border-color: var(--teal);
+  background: #fff;
+}
+.chat-compose-meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
 
 /* HitlAction component banner */
 .hitl {
@@ -1172,6 +1204,65 @@ a {
   justify-content: space-between;
   padding: 12px 14px;
   border-top: 1px solid var(--line);
+}
+.pv-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+}
+.pv-card,
+.pv-panel {
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.86);
+  box-shadow: var(--shadow);
+}
+.pv-card {
+  padding: 16px;
+}
+.pv-card h4,
+.pv-panel h4 {
+  font-size: 15px;
+}
+.pv-card p,
+.pv-note p {
+  margin-top: 7px;
+  font-size: 12.5px;
+  line-height: 1.65;
+  color: var(--ink-2);
+}
+.pv-bullets {
+  display: grid;
+  gap: 8px;
+  list-style: none;
+  margin-top: 10px;
+}
+.pv-bullets li {
+  border-radius: 10px;
+  background: var(--surface-2);
+  padding: 8px 10px;
+  font-size: 12.5px;
+  color: var(--ink);
+}
+.pv-meta-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.3fr) minmax(0, 0.7fr);
+  gap: 14px;
+}
+.pv-panel {
+  padding: 16px;
+}
+.pv-stack {
+  display: grid;
+  gap: 10px;
+}
+.pv-note {
+  border-radius: 12px;
+  background: var(--surface-2);
+  padding: 12px;
+}
+.pv-note b {
+  font-size: 12.5px;
 }
 
 /* site rows / autofill */
@@ -1683,6 +1774,10 @@ a {
     height: auto;
     position: static;
   }
+  .pv-grid,
+  .pv-meta-grid {
+    grid-template-columns: 1fr;
+  }
   .loop-wrap {
     grid-template-columns: 1fr;
   }
@@ -1694,5 +1789,12 @@ a {
   }
   .stat-strip {
     grid-template-columns: 1fr 1fr;
+  }
+}
+@media (max-width: 720px) {
+  .chat-compose-meta,
+  .pv-foot {
+    flex-direction: column;
+    align-items: stretch;
   }
 }

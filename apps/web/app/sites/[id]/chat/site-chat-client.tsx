@@ -96,10 +96,20 @@ function roleAllowsEdit(role: string | undefined) {
   return role === "owner" || role === "admin" || role === "operator";
 }
 
-function statusChipClass(status: "pass" | "warn") {
-  return status === "pass"
-    ? "border-emerald-200 bg-emerald-50 text-emerald-700"
-    : "border-amber-200 bg-amber-50 text-amber-700";
+function localeLabel(locale: SiteDetail["locales"][number]["locale"]) {
+  return locale.toUpperCase();
+}
+
+function formatStatus(status: SiteDetail["project"]["status"] | SiteDetail["locales"][number]["publishStatus"]) {
+  return status === "published"
+    ? "published"
+    : status === "draft"
+      ? "draft"
+      : status === "pending"
+        ? "pending"
+        : status === "failed"
+          ? "failed"
+          : "offline";
 }
 
 export function SiteChatClient({ siteId }: { siteId: string }) {
@@ -249,200 +259,172 @@ export function SiteChatClient({ siteId }: { siteId: string }) {
   }
 
   return (
-    <main className="min-h-screen bg-[radial-gradient(circle_at_top_left,_rgba(24,121,78,0.14),_transparent_28%),linear-gradient(180deg,#f8f6ef_0%,#f3efe2_100%)] px-4 py-6 md:px-8">
-      <div className="mx-auto flex w-full max-w-7xl flex-col gap-6">
-        <section className="rounded-[28px] border border-[#d7d0be] bg-white/85 p-6 shadow-[0_24px_90px_rgba(71,56,18,0.08)] backdrop-blur">
-          <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
-            <div className="space-y-3">
-              <p className="font-mono text-xs uppercase tracking-[0.28em] text-[#2d6b57]">
-                AI Site Builder
-              </p>
-              <div>
-                <h1 className="text-3xl font-semibold tracking-tight text-[#1f241f] md:text-4xl">
-                  {detail?.project.name ?? "站点草稿"}
-                </h1>
-                <p className="mt-2 max-w-3xl text-sm leading-7 text-[#5e5a4e] md:text-base">
-                  左侧对话改稿，右侧预览当前 locale 内容。建站内容仅允许引用已核准的公开知识。
-                </p>
-              </div>
-            </div>
+    <>
+      <div className="head-row" style={{ marginBottom: 18 }}>
+        <div>
+          <div className="eyebrow">AI Site Builder</div>
+          <h2 className="sec" style={{ marginTop: 4 }}>
+            {detail?.project.name ?? "站点草稿"}
+          </h2>
+          <div className="sub" style={{ marginTop: 4 }}>
+            左侧对话改稿，右侧按 locale 预览当前站点。内容只允许引用已核准的公开知识。
+          </div>
+        </div>
+        <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+          <select
+            className="btn ghost sm"
+            value={selectedTenantId}
+            onChange={(event) => setSelectedTenantId(event.target.value)}
+          >
+            {me?.memberships.map((membership) => (
+              <option key={membership.tenantId} value={membership.tenantId}>
+                {membership.tenantName}
+              </option>
+            ))}
+          </select>
+          <span className={`st ${detail ? formatStatus(detail.project.status) : "pending"}`}>
+            {detail ? detail.project.status : "loading"}
+          </span>
+          <span className="badge line">
+            {detail ? `v${detail.version?.versionNumber ?? 0}` : "加载中"}
+          </span>
+        </div>
+      </div>
 
-            <div className="flex flex-wrap gap-3">
-              <select
-                className="rounded-2xl border border-[#d7d0be] bg-white px-4 py-2 text-sm text-[#1f241f]"
-                value={selectedTenantId}
-                onChange={(event) => setSelectedTenantId(event.target.value)}
-              >
-                {me?.memberships.map((membership) => (
-                  <option key={membership.tenantId} value={membership.tenantId}>
-                    {membership.tenantName}
-                  </option>
-                ))}
-              </select>
-              <div className="rounded-2xl border border-[#d7d0be] bg-[#f7f3e8] px-4 py-2 text-sm text-[#514c42]">
-                {detail ? `v${detail.version?.versionNumber ?? 0}` : "加载中"}
-              </div>
+      {error ? (
+        <div
+          className="card"
+          style={{
+            padding: "12px 16px",
+            marginBottom: 18,
+            borderColor: "var(--warn-soft)",
+            background: "var(--warn-soft)",
+            color: "var(--warn)",
+          }}
+        >
+          {error}
+        </div>
+      ) : null}
+
+      <div className="split">
+        <div className="card chat split-chat">
+          <div className="chat-head">
+            <div className="ai">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
+                <rect x="3" y="4" width="18" height="14" rx="2" />
+                <path d="M3 9h18" />
+              </svg>
+            </div>
+            <div style={{ minWidth: 0 }}>
+              <b>建站专家</b>
+              <br />
+              <span>
+                {currentMembership ? `当前角色：${currentMembership.role}` : "加载角色中"} · public KB only
+              </span>
             </div>
           </div>
 
-          {badges.length > 0 ? (
-            <div className="mt-5 flex flex-wrap gap-2">
-              {badges.map((badge) => (
-                <span
-                  key={badge.label}
-                  className={`rounded-full border px-3 py-1 text-xs font-medium ${
-                    badge.active
-                      ? "border-emerald-200 bg-emerald-50 text-emerald-700"
-                      : "border-slate-200 bg-slate-50 text-slate-500"
-                  }`}
+          <div className="chat-body">
+            {detail?.version?.conversation?.length ? (
+              detail.version.conversation.map((item, index) => (
+                <div
+                  key={`${item.createdAt}-${index}`}
+                  className={`msg ${item.role === "assistant" ? "a" : "u"}`}
                 >
-                  {badge.label}
-                </span>
+                  {item.content}
+                </div>
+              ))
+            ) : (
+              <div className="msg a">
+                {loading
+                  ? "正在加载站点对话…"
+                  : "告诉我你想改的市场表达、卖点顺序、FAQ、CTA 或语气，我会保留版本快照并只引用公开知识。"}
+              </div>
+            )}
+
+            {badges.length > 0 ? (
+              <div className="msg a">
+                当前站点基线已挂载：
+                <div className="chips">
+                  {badges.map((badge) => (
+                    <span key={badge.label} className="chip">
+                      {badge.label} {badge.active ? "✓" : "·"}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            ) : null}
+          </div>
+
+          <div className="chat-compose">
+            <textarea
+              className="chat-textarea"
+              placeholder="例如：首屏更强调交期；新增一段认证说明；阿语版语气再正式一点。"
+              value={message}
+              onChange={(event) => setMessage(event.target.value)}
+              disabled={!roleAllowsEdit(currentMembership?.role) || submitting}
+            />
+            <div className="chat-compose-meta">
+              <span className="sub">会保留版本快照；引用会被限制在 public 知识范围内。</span>
+              <button
+                type="button"
+                className="btn primary"
+                onClick={() => void submitMessage()}
+                disabled={!roleAllowsEdit(currentMembership?.role) || submitting || !message.trim()}
+              >
+                {submitting ? "更新中…" : "发送修改"}
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <div className="card preview">
+          <div className="pv-bar">
+            <span className="pv-dot" />
+            <span className="pv-dot" />
+            <span className="pv-dot" />
+            <span className="pv-url">
+              {currentLocale ? currentLocale.urlPath : "/site/..."}
+            </span>
+            <div className="langtab">
+              {detail?.locales.map((locale) => (
+                <b
+                  key={locale.id}
+                  className={selectedLocale === locale.locale ? "on" : ""}
+                  onClick={() => setSelectedLocale(locale.locale)}
+                >
+                  {localeLabel(locale.locale)}
+                </b>
               ))}
             </div>
-          ) : null}
-        </section>
-
-        {error ? (
-          <section className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
-            {error}
-          </section>
-        ) : null}
-
-        <section className="grid gap-6 lg:grid-cols-[0.95fr_1.05fr]">
-          <div className="rounded-[28px] border border-[#d7d0be] bg-white/85 p-5 shadow-[0_18px_70px_rgba(71,56,18,0.08)]">
-            <div className="mb-4 flex items-center justify-between">
-              <div>
-                <h2 className="text-lg font-semibold text-[#1f241f]">建站对话</h2>
-                <p className="text-sm text-[#6a6457]">
-                  {currentMembership ? `当前角色：${currentMembership.role}` : "加载角色中"}
-                </p>
-              </div>
-            </div>
-
-            <div className="space-y-3">
-              {detail?.version?.conversation?.length ? (
-                detail.version.conversation.map((item, index) => (
-                  <article
-                    key={`${item.createdAt}-${index}`}
-                    className={`rounded-3xl px-4 py-3 text-sm leading-7 ${
-                      item.role === "assistant"
-                        ? "mr-8 border border-[#dbe8df] bg-[#f1f8f3] text-[#214736]"
-                        : "ml-8 border border-[#eadfc7] bg-[#fff8ea] text-[#5a4a1b]"
-                    }`}
-                  >
-                    <div className="mb-1 text-xs font-medium uppercase tracking-[0.18em] opacity-70">
-                      {item.role === "assistant" ? "Builder" : "You"}
-                    </div>
-                    <div>{item.content}</div>
-                  </article>
-                ))
-              ) : (
-                <div className="rounded-3xl border border-dashed border-[#d7d0be] bg-[#fcfaf4] px-4 py-5 text-sm text-[#6a6457]">
-                  {loading ? "正在加载站点对话…" : "当前还没有可展示的对话记录。"}
-                </div>
-              )}
-            </div>
-
-            <div className="mt-5 space-y-3">
-              <textarea
-                className="min-h-32 w-full rounded-3xl border border-[#d7d0be] bg-[#fffdf8] px-4 py-3 text-sm leading-7 text-[#1f241f] outline-none transition focus:border-[#2d6b57]"
-                placeholder="例如：首屏更强调交期；加一段客户常见问题；阿语版语气更专业。"
-                value={message}
-                onChange={(event) => setMessage(event.target.value)}
-                disabled={!roleAllowsEdit(currentMembership?.role) || submitting}
-              />
-              <div className="flex items-center justify-between gap-3">
-                <p className="text-xs leading-6 text-[#6a6457]">
-                  会保留版本快照；引用会被限制在 public 知识范围内。
-                </p>
-                <button
-                  type="button"
-                  className="rounded-full bg-[#1f6a52] px-5 py-2.5 text-sm font-medium text-white transition hover:bg-[#174f3d] disabled:cursor-not-allowed disabled:bg-[#88ab9d]"
-                  onClick={() => void submitMessage()}
-                  disabled={!roleAllowsEdit(currentMembership?.role) || submitting || !message.trim()}
-                >
-                  {submitting ? "更新中…" : "发送修改"}
-                </button>
-              </div>
-            </div>
           </div>
 
-          <div className="rounded-[28px] border border-[#d7d0be] bg-white/85 p-5 shadow-[0_18px_70px_rgba(71,56,18,0.08)]">
-            <div className="flex flex-col gap-4 border-b border-[#ece5d3] pb-4 md:flex-row md:items-start md:justify-between">
-              <div>
-                <h2 className="text-lg font-semibold text-[#1f241f]">预览草稿</h2>
-                <p className="mt-1 text-sm text-[#6a6457]">
-                  {currentLocale ? `${currentLocale.urlPath} · ${currentLocale.publishStatus}` : "等待数据"}
-                </p>
-              </div>
+          {currentLocale ? (
+            <>
+              <div className={`pv-body ${currentLocale.direction === "rtl" ? "pv-rtl" : ""}`}>
+                <div className="badge line" style={{ marginBottom: 12 }}>
+                  {currentLocale.publishStatus}
+                </div>
+                <div className="pv-hero">{currentLocale.translatedContent.headline}</div>
+                <div className="pv-sub">{currentLocale.translatedContent.subheadline}</div>
+                <div className="pv-cta">{currentLocale.translatedContent.ctaLabel}</div>
 
-              <div className="flex flex-wrap gap-2">
-                {detail?.locales.map((locale) => (
-                  <button
-                    key={locale.id}
-                    type="button"
-                    className={`rounded-full border px-3 py-1.5 text-xs font-medium uppercase tracking-[0.18em] ${
-                      selectedLocale === locale.locale
-                        ? "border-[#1f6a52] bg-[#1f6a52] text-white"
-                        : "border-[#d7d0be] bg-white text-[#514c42]"
-                    }`}
-                    onClick={() => setSelectedLocale(locale.locale)}
-                  >
-                    {locale.locale}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            {currentLocale ? (
-              <div
-                className="mt-5 space-y-6"
-                dir={currentLocale.direction}
-              >
-                <section className="rounded-[24px] border border-[#dfe7e1] bg-[linear-gradient(135deg,rgba(31,106,82,0.08),rgba(213,192,149,0.14))] p-6">
-                  <div className="mb-3 text-xs font-medium uppercase tracking-[0.2em] text-[#2d6b57]">
-                    Hero
-                  </div>
-                  <h3 className="text-3xl font-semibold tracking-tight text-[#19211d]">
-                    {currentLocale.translatedContent.headline}
-                  </h3>
-                  <p className="mt-3 max-w-3xl text-base leading-8 text-[#4f514e]">
-                    {currentLocale.translatedContent.subheadline}
-                  </p>
-                  <div className="mt-5 inline-flex rounded-full bg-[#1f6a52] px-4 py-2 text-sm font-medium text-white">
-                    {currentLocale.translatedContent.ctaLabel}
-                  </div>
-                </section>
-
-                <section className="grid gap-4 md:grid-cols-2">
+                <div className="pv-grid" style={{ marginTop: 18 }}>
                   {currentLocale.translatedContent.sections.map((section) => (
-                    <article
-                      key={section.id}
-                      className="rounded-[24px] border border-[#ece5d3] bg-[#fffdf8] p-5"
-                    >
-                      <h4 className="text-lg font-semibold text-[#1f241f]">
-                        {section.heading}
-                      </h4>
-                      <p className="mt-2 text-sm leading-7 text-[#5f594c]">
-                        {section.body}
-                      </p>
+                    <article className="pv-card" key={section.id}>
+                      <h4>{section.heading}</h4>
+                      <p>{section.body}</p>
                       {section.bullets.length ? (
-                        <ul className="mt-4 space-y-2 text-sm leading-7 text-[#3f413f]">
+                        <ul className="pv-bullets">
                           {section.bullets.map((bullet) => (
-                            <li key={bullet} className="rounded-2xl bg-[#f5f0e4] px-3 py-2">
-                              {bullet}
-                            </li>
+                            <li key={bullet}>{bullet}</li>
                           ))}
                         </ul>
                       ) : null}
                       {section.sourceCitations.length ? (
-                        <div className="mt-4 flex flex-wrap gap-2">
+                        <div className="chips">
                           {section.sourceCitations.map((citation) => (
-                            <span
-                              key={citation}
-                              className="rounded-full border border-[#dbe8df] bg-[#f1f8f3] px-3 py-1 text-xs text-[#2d6b57]"
-                            >
+                            <span className="chip" key={citation}>
                               {citation}
                             </span>
                           ))}
@@ -450,64 +432,80 @@ export function SiteChatClient({ siteId }: { siteId: string }) {
                       ) : null}
                     </article>
                   ))}
-                </section>
+                </div>
 
                 {currentLocale.translatedContent.faq.length ? (
-                  <section className="rounded-[24px] border border-[#ece5d3] bg-[#fffdf8] p-5">
-                    <h4 className="text-lg font-semibold text-[#1f241f]">FAQ</h4>
-                    <div className="mt-4 space-y-4">
-                      {currentLocale.translatedContent.faq.map((item) => (
-                        <article key={item.question} className="rounded-2xl bg-[#f8f4ea] p-4">
-                          <h5 className="font-medium text-[#1f241f]">{item.question}</h5>
-                          <p className="mt-2 text-sm leading-7 text-[#5f594c]">{item.answer}</p>
-                        </article>
-                      ))}
-                    </div>
-                  </section>
+                  <div className="pv-stack" style={{ marginTop: 18 }}>
+                    <h4 className="sec" style={{ fontSize: 16 }}>FAQ</h4>
+                    {currentLocale.translatedContent.faq.map((item) => (
+                      <article className="pv-card" key={item.question}>
+                        <h4>{item.question}</h4>
+                        <p>{item.answer}</p>
+                      </article>
+                    ))}
+                  </div>
                 ) : null}
 
-                <section className="grid gap-4 xl:grid-cols-[0.7fr_0.3fr]">
-                  <div className="rounded-[24px] border border-[#ece5d3] bg-[#fffdf8] p-5">
-                    <h4 className="text-lg font-semibold text-[#1f241f]">预览体检</h4>
-                    <div className="mt-4 space-y-3">
+                <div className="pv-meta-grid" style={{ marginTop: 18 }}>
+                  <div className="pv-panel">
+                    <div className="head-row" style={{ marginBottom: 10 }}>
+                      <h4 style={{ fontSize: 15 }}>预览体检</h4>
+                      <span className="badge line">{detail?.version?.previewChecks.length ?? 0} 项</span>
+                    </div>
+                    <div className="pv-stack">
                       {detail?.version?.previewChecks.map((check) => (
-                        <div
-                          key={check.key}
-                          className="flex flex-col gap-2 rounded-2xl border border-[#ece5d3] bg-white p-4 md:flex-row md:items-center md:justify-between"
-                        >
-                          <div>
-                            <div className="font-medium text-[#1f241f]">{check.label}</div>
-                            <div className="text-sm leading-7 text-[#635d51]">{check.detail}</div>
+                        <div className="pv-note" key={check.key}>
+                          <div className="head-row" style={{ marginBottom: 4 }}>
+                            <b>{check.label}</b>
+                            <span className={`st ${check.status === "pass" ? "approved" : "pending"}`}>
+                              {check.status === "pass" ? "通过" : "关注"}
+                            </span>
                           </div>
-                          <span className={`rounded-full border px-3 py-1 text-xs font-medium ${statusChipClass(check.status)}`}>
-                            {check.status === "pass" ? "通过" : "关注"}
-                          </span>
+                          <p>{check.detail}</p>
                         </div>
                       ))}
                     </div>
                   </div>
 
-                  <div className="rounded-[24px] border border-[#ece5d3] bg-[#fffdf8] p-5">
-                    <h4 className="text-lg font-semibold text-[#1f241f]">溯源</h4>
-                    <div className="mt-4 space-y-3">
-                      {detail?.version?.citations.map((item) => (
-                        <article key={item.sourceCitation} className="rounded-2xl bg-[#f1f8f3] p-4">
-                          <div className="text-sm font-medium text-[#214736]">{item.sourceCitation}</div>
-                          <div className="mt-2 text-xs leading-6 text-[#436153]">{item.excerpt}</div>
-                        </article>
-                      ))}
+                  <div className="pv-panel">
+                    <div className="head-row" style={{ marginBottom: 10 }}>
+                      <h4 style={{ fontSize: 15 }}>溯源</h4>
+                      <span className="badge line">{detail?.version?.citations.length ?? 0} 条</span>
+                    </div>
+                    <div className="pv-stack">
+                      {detail?.version?.citations.length ? (
+                        detail.version.citations.map((item) => (
+                          <div className="pv-note" key={item.sourceCitation}>
+                            <b>{item.sourceCitation}</b>
+                            <p>{item.excerpt}</p>
+                          </div>
+                        ))
+                      ) : (
+                        <div className="sub">当前版本还没有可展示的引用。</div>
+                      )}
                     </div>
                   </div>
-                </section>
+                </div>
               </div>
-            ) : (
-              <div className="mt-6 rounded-3xl border border-dashed border-[#d7d0be] bg-[#fcfaf4] px-4 py-8 text-sm text-[#6a6457]">
+
+              <div className="pv-foot">
+                <div className="sub">
+                  {detail?.project.product ?? "未命名产品"} · {detail?.project.market ?? "未命名市场"}
+                </div>
+                <a className="btn ghost sm" href={`/site/${detail?.project.slug}/${currentLocale.locale}`} target="_blank" rel="noreferrer">
+                  打开公开页
+                </a>
+              </div>
+            </>
+          ) : (
+            <div className="pv-body">
+              <div className="msg a" style={{ maxWidth: "100%" }}>
                 {loading ? "正在加载预览…" : "当前站点还没有 locale 草稿。"}
               </div>
-            )}
-          </div>
-        </section>
+            </div>
+          )}
+        </div>
       </div>
-    </main>
+    </>
   );
 }

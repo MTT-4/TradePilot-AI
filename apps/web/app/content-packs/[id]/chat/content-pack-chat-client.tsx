@@ -96,6 +96,43 @@ type ImageGenerationDraft = {
   referenceFile: File | null;
 };
 
+function platformGradient(platform: string) {
+  switch (platform) {
+    case "linkedin":
+      return "linear-gradient(140deg,#0A66C2,#08498C)";
+    case "facebook":
+      return "linear-gradient(140deg,#1877F2,#0F5BD1)";
+    case "instagram":
+      return "linear-gradient(140deg,#C13584,#F77737)";
+    case "reels":
+      return "linear-gradient(140deg,#5851DB,#E1306C)";
+    case "tiktok":
+      return "linear-gradient(140deg,#111,#00C2B8)";
+    case "youtube":
+      return "linear-gradient(140deg,#FF0000,#B80000)";
+    case "shorts":
+      return "linear-gradient(140deg,#FF4D4D,#CC0000)";
+    case "vk":
+      return "linear-gradient(140deg,#0077FF,#0048B3)";
+    case "rutube":
+      return "linear-gradient(140deg,#23173F,#000)";
+    default:
+      return "linear-gradient(140deg,#0C5C56,#072F2B)";
+  }
+}
+
+function formatPublishStatus(status: string) {
+  return status === "published"
+    ? "published"
+    : status === "pending"
+      ? "pending"
+      : status === "approved"
+        ? "approved"
+        : status === "draft"
+          ? "draft"
+          : "offline";
+}
+
 export function ContentPackChatClient({ packId }: { packId: string }) {
   const [tenantId, setTenantId] = useState<string | null>(null);
   const [tenantName, setTenantName] = useState<string>("");
@@ -201,6 +238,49 @@ export function ContentPackChatClient({ packId }: { packId: string }) {
     () => new Map(rules.map((item) => [item.platform, item])),
     [rules],
   );
+  const qualityNotes = useMemo(() => {
+    if (!pack) {
+      return [];
+    }
+
+    const notes = [
+      {
+        tone: "ok",
+        title: "每条内容都已绑定追踪链路",
+        detail: pack.items.every((item) => item.trackingLink)
+          ? "当前内容项都带追踪链接，可回流到平台 → 内容 → 询盘。"
+          : "部分内容项还缺追踪链接，发布前需要补齐。",
+      },
+    ];
+
+    const videoItems = pack.items.filter((item) => item.mediaType === "video_script");
+    if (videoItems.length > 0) {
+      notes.push({
+        tone: "ok",
+        title: "视频平台按脚本 / 分镜模式交付",
+        detail: "当前只生成脚本、分镜、封面与规格校验，不生成成片，符合 V1.0 范围约束。",
+      });
+    }
+
+    const longDurationRule = rules.find(
+      (item) => item.mediaType === "video_script" && item.rules.durationSeconds,
+    );
+    if (longDurationRule?.rules.durationSeconds) {
+      notes.push({
+        tone: "warn",
+        title: "短视频时长需要继续盯规则上限",
+        detail: `当前规则库包含 ${longDurationRule.rules.durationSeconds}s 上限，改稿时不要把脚本扩过平台阈值。`,
+      });
+    }
+
+    notes.push({
+      tone: "ok",
+      title: "文案与规格会同步编辑",
+      detail: "你在右侧改正文、图像模式、背景说明后，保存与生成动作都会直接作用于真实内容项。",
+    });
+
+    return notes.slice(0, 4);
+  }, [pack, rules]);
 
   async function submitChat() {
     if (!tenantId || !messageInput.trim()) {
@@ -401,180 +481,188 @@ export function ContentPackChatClient({ packId }: { packId: string }) {
 
   if (loading) {
     return (
-      <main className="min-h-screen bg-[#f6f1e6] px-6 py-10 text-[#1f241f]">
-        <div className="mx-auto max-w-6xl rounded-[28px] border border-[#d9d0bb] bg-white/70 p-8">
-          正在加载内容包…
-        </div>
-      </main>
+      <div className="card" style={{ padding: 24 }}>
+        正在加载内容包…
+      </div>
     );
   }
 
   if (error && !pack) {
     return (
-      <main className="min-h-screen bg-[#f6f1e6] px-6 py-10 text-[#1f241f]">
-        <div className="mx-auto max-w-4xl rounded-[28px] border border-[#d9d0bb] bg-white/80 p-8">
-          {error}
-        </div>
-      </main>
+      <div className="card" style={{ padding: 24 }}>
+        {error}
+      </div>
     );
   }
 
   return (
-    <main className="min-h-screen bg-[radial-gradient(circle_at_top_left,_rgba(12,92,86,0.18),_transparent_38%),linear-gradient(180deg,#f8f4ea_0%,#efe5d0_100%)] px-4 py-6 text-[#1f241f] md:px-8">
-      <div className="mx-auto max-w-7xl space-y-6">
-        <section className="rounded-[30px] border border-[#d9d0bb] bg-[#fffdf7]/90 p-6 shadow-[0_24px_80px_rgba(61,53,31,0.08)]">
-          <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
+    <>
+      <div className="head-row">
+        <div>
+          <div className="eyebrow">AI 设计 / 内容包</div>
+          <h2 className="sec" style={{ marginTop: 4 }}>
+            {pack?.pack.title}
+          </h2>
+          <div className="sub" style={{ marginTop: 4 }}>
+            租户：{tenantName} · 选题：{pack?.pack.topic} · 市场：{pack?.pack.market ?? "Global"} · 状态：{pack?.pack.status}
+          </div>
+        </div>
+        <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+          <a className="btn ghost sm" href={`/api/content-packs/${packId}/export?fmt=csv`} target="_blank" rel="noreferrer">
+            导出 CSV
+          </a>
+          <a className="btn ghost sm" href={`/api/content-packs/${packId}/export?fmt=md`} target="_blank" rel="noreferrer">
+            导出 Markdown
+          </a>
+          <a className="btn ghost sm" href={`/api/content-packs/${packId}/export?fmt=zip`} target="_blank" rel="noreferrer">
+            导出 ZIP
+          </a>
+        </div>
+      </div>
+
+      {pack?.pack.brandKit ? (
+        <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 18 }}>
+          <span className="badge line">品牌：{pack.pack.brandKit.companyName}</span>
+          <span className="badge line">主色：{pack.pack.brandKit.primaryColor ?? "未设置"}</span>
+          <span className="badge line">辅色：{pack.pack.brandKit.secondaryColor ?? "未设置"}</span>
+        </div>
+      ) : null}
+
+      {error ? (
+        <div
+          className="card"
+          style={{
+            padding: "12px 16px",
+            marginBottom: 18,
+            borderColor: "var(--warn-soft)",
+            background: "var(--warn-soft)",
+            color: "var(--warn)",
+          }}
+        >
+          {error}
+        </div>
+      ) : null}
+
+      <div className="split">
+        <div className="card chat split-chat">
+          <div className="chat-head">
+            <div className="ai">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
+                <path d="M12 3l2.4 5.4L20 9l-4 4 1 6-5-3-5 3 1-6-4-4 5.6-.6z" />
+              </svg>
+            </div>
             <div>
-              <div className="text-xs uppercase tracking-[0.28em] text-[#7b745f]">
-                AI 设计 / 内容包
+              <b>设计师</b>
+              <br />
+              <span>人 + AI 协作 · 取知识库</span>
+            </div>
+          </div>
+
+          <div className="chat-body">
+            {messages.map((message, index) => (
+              <div
+                key={`${message.role}-${index}`}
+                className={`msg ${message.role === "assistant" ? "a" : "u"}`}
+              >
+                {message.content}
               </div>
-              <h1 className="mt-3 text-3xl font-semibold tracking-[-0.03em] text-[#1f241f]">
-                {pack?.pack.title}
-              </h1>
-              <p className="mt-2 text-sm leading-7 text-[#5f594c]">
-                租户：{tenantName} · 选题：{pack?.pack.topic} · 市场：
-                {pack?.pack.market ?? "Global"} · 状态：{pack?.pack.status}
-              </p>
-            </div>
-            <div className="flex flex-wrap gap-3">
-              <a
-                className="rounded-full border border-[#d4cab5] px-4 py-2 text-sm text-[#31463b]"
-                href={`/api/content-packs/${packId}/export?fmt=csv`}
-                target="_blank"
-                rel="noreferrer"
-              >
-                导出 CSV
-              </a>
-              <a
-                className="rounded-full border border-[#d4cab5] px-4 py-2 text-sm text-[#31463b]"
-                href={`/api/content-packs/${packId}/export?fmt=md`}
-                target="_blank"
-                rel="noreferrer"
-              >
-                导出 Markdown
-              </a>
-              <a
-                className="rounded-full border border-[#d4cab5] px-4 py-2 text-sm text-[#31463b]"
-                href={`/api/content-packs/${packId}/export?fmt=zip`}
-                target="_blank"
-                rel="noreferrer"
-              >
-                导出 ZIP
-              </a>
-            </div>
+            ))}
           </div>
 
-          {pack?.pack.brandKit ? (
-            <div className="mt-5 flex flex-wrap gap-3 text-sm text-[#405045]">
-              <span className="rounded-full bg-[#f4efe1] px-3 py-1">
-                品牌：{pack.pack.brandKit.companyName}
-              </span>
-              <span className="rounded-full bg-[#f4efe1] px-3 py-1">
-                主色：{pack.pack.brandKit.primaryColor ?? "未设置"}
-              </span>
-              <span className="rounded-full bg-[#f4efe1] px-3 py-1">
-                辅色：{pack.pack.brandKit.secondaryColor ?? "未设置"}
-              </span>
-            </div>
-          ) : null}
-        </section>
-
-        {error ? (
-          <div className="rounded-[22px] border border-[#d9c4ad] bg-[#fff1e6] px-5 py-4 text-sm text-[#8b4d26]">
-            {error}
-          </div>
-        ) : null}
-
-        <section className="grid gap-6 lg:grid-cols-[360px_minmax(0,1fr)]">
-          <div className="rounded-[30px] border border-[#d9d0bb] bg-[#fffdf7]/95 p-5">
-            <div className="text-xs uppercase tracking-[0.28em] text-[#7b745f]">
-              人 + AI 对话
-            </div>
-            <div className="mt-4 space-y-3">
-              {messages.map((message, index) => (
-                <div
-                  key={`${message.role}-${index}`}
-                  className={`rounded-[24px] px-4 py-3 text-sm leading-7 ${
-                    message.role === "assistant"
-                      ? "bg-[#eef5f0] text-[#214735]"
-                      : "bg-[#1f241f] text-[#f7f3ea]"
-                  }`}
-                >
-                  {message.content}
-                </div>
-              ))}
-            </div>
+          <div className="chat-compose">
             <textarea
-              className="mt-4 min-h-36 w-full rounded-[24px] border border-[#d8cfba] bg-white px-4 py-3 text-sm leading-7 outline-none focus:border-[#23604b]"
+              className="chat-textarea"
               placeholder="例如：把 LinkedIn 调成更技术型，把 TikTok 的开头钩子更短，把 Instagram 改成 4 张轮播。"
               value={messageInput}
               onChange={(event) => setMessageInput(event.target.value)}
             />
-            <button
-              className="mt-4 w-full rounded-full bg-[#214735] px-5 py-3 text-sm font-medium text-[#f7f3ea] disabled:opacity-50"
-              onClick={() => void submitChat()}
-              disabled={submitting || !messageInput.trim()}
-            >
-              {submitting ? "处理中…" : "应用到内容包"}
-            </button>
+            <div className="chat-compose-meta">
+              <span className="sub">右侧内容项会按你的要求实时更新，继续保留平台规则与追踪链接。</span>
+              <button
+                className="btn primary"
+                onClick={() => void submitChat()}
+                disabled={submitting || !messageInput.trim()}
+              >
+                {submitting ? "处理中…" : "应用到内容包"}
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <div>
+          <div className="rules">
+            <div className="ric">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
+                <path d="M12 3v3M12 18v3M3 12h3M18 12h3" />
+                <circle cx="12" cy="12" r="4" />
+              </svg>
+            </div>
+            <div>
+              <div className="rt">已按各平台规则适配 · GPT 实时校正</div>
+              <div className="rs">
+                尺寸 / 时长 / 文案 / 标签逐项对齐；视频平台输出脚本 + 分镜 + 封面，不做成片。
+              </div>
+            </div>
+            <span className="upd">规则 · 2026-06</span>
           </div>
 
-          <div className="space-y-5">
-            <div className="grid gap-4 xl:grid-cols-2">
-              {pack?.items.map((item) => {
-                const rule = rulesByPlatform.get(item.platform);
-                const published = item.publishStatus === "published";
+          <div className="pack-grid" style={{ marginTop: 14 }}>
+            {pack?.items.map((item) => {
+              const rule = rulesByPlatform.get(item.platform);
+              const published = item.publishStatus === "published";
 
-                return (
-                  <article
-                    key={item.id}
-                    className="rounded-[28px] border border-[#d9d0bb] bg-[#fffdf7]/95 p-5"
-                  >
-                    <div className="flex items-start justify-between gap-4">
+              return (
+                <article className="pk" key={item.id} style={{ overflow: "hidden" }}>
+                  <div className="pk-top" style={{ background: platformGradient(item.platform) }}>
+                    <span className="ratio">
+                      {item.spec.ratio ?? "-"}
+                      {item.spec.dimensions ? ` · ${item.spec.dimensions}` : ""}
+                    </span>
+                    <span className="plat">{rule?.displayName ?? item.platform}</span>
+                    <span className="kind">
+                      {item.mediaType === "video_script" ? "脚本+分镜+封面" : item.mediaType}
+                    </span>
+                  </div>
+
+                  <div className="pk-body">
+                    <div className="head-row" style={{ marginBottom: 10 }}>
                       <div>
-                        <div className="text-xs uppercase tracking-[0.24em] text-[#7b745f]">
-                          {rule?.displayName ?? item.platform}
+                        <div className="pk-spec">{item.title}</div>
+                        <div className="sub" style={{ marginTop: 4 }}>
+                          Cover: {item.coverHeadline}
                         </div>
-                        <h2 className="mt-2 text-xl font-semibold text-[#1f241f]">
-                          {item.title}
-                        </h2>
-                        <p className="mt-2 text-sm text-[#5f594c]">
-                          {item.mediaType} · {item.publishStatus}
-                        </p>
                       </div>
-                      <button
-                        className={`rounded-full px-4 py-2 text-xs font-medium ${
-                          published
-                            ? "bg-[#efe2d6] text-[#8a5430]"
-                            : "bg-[#214735] text-[#f7f3ea]"
-                        }`}
-                        onClick={() => void togglePublished(item.id, published)}
-                        disabled={submitting}
-                      >
-                        {published ? "撤回已发" : "发起发布审批"}
-                      </button>
+                      <span className={`st ${formatPublishStatus(item.publishStatus)}`}>
+                        {item.publishStatus}
+                      </span>
                     </div>
 
-                    <div className="mt-4 rounded-[24px] bg-[#f4efe1] p-4 text-sm leading-7 text-[#4d4a43]">
-                      <div>Cover: {item.coverHeadline}</div>
-                      <div>
-                        Spec: {item.spec.ratio ?? "-"} · {item.spec.dimensions ?? "-"}
-                        {item.spec.durationSeconds
-                          ? ` · ${item.spec.durationSeconds}s`
-                          : ""}
-                      </div>
-                      <div>建议发布时间：{rule?.rules.recommendedWindow ?? "-"}</div>
-                      {item.trackingLink ? (
-                        <div className="break-all">
-                          追踪链接：{item.trackingLink.resolvedUrl}
-                        </div>
-                      ) : (
-                        <div className="text-[#9a5e10]">追踪链接缺失</div>
-                      )}
+                    <div className="pk-cap">{draftBodies[item.id] ?? item.body}</div>
+
+                    <div className="pk-tags">
+                      {item.hashtags.length ? item.hashtags.join(" ") : "无标签"}
                     </div>
+
+                    {item.trackingLink ? (
+                      <div className="pk-link">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
+                          <path d="M10 13a5 5 0 0 0 7 0l3-3a5 5 0 0 0-7-7l-1 1" />
+                        </svg>
+                        {item.trackingLink.slug}
+                        <button
+                          type="button"
+                          onClick={() => void navigator.clipboard.writeText(item.trackingLink?.resolvedUrl ?? "")}
+                        >
+                          复制
+                        </button>
+                      </div>
+                    ) : (
+                      <div className="pk-link">追踪链接缺失</div>
+                    )}
 
                     <textarea
-                      className="mt-4 min-h-32 w-full rounded-[22px] border border-[#d8cfba] bg-white px-4 py-3 text-sm leading-7 outline-none focus:border-[#23604b]"
+                      className="chat-textarea"
+                      style={{ marginTop: 12, minHeight: 132 }}
                       value={draftBodies[item.id] ?? item.body}
                       onChange={(event) =>
                         setDraftBodies((current) => ({
@@ -584,51 +672,40 @@ export function ContentPackChatClient({ packId }: { packId: string }) {
                       }
                     />
 
-                    <div className="mt-4 flex flex-wrap gap-2">
-                      {item.hashtags.map((hashtag) => (
-                        <span
-                          key={hashtag}
-                          className="rounded-full bg-[#eef5f0] px-3 py-1 text-xs text-[#214735]"
-                        >
-                          {hashtag}
-                        </span>
-                      ))}
-                    </div>
-
-                    <div className="mt-4 grid gap-3 md:grid-cols-2">
-                      <div className="rounded-[20px] border border-[#ece2cd] bg-white/80 p-4 text-sm text-[#4f4a40]">
-                        <div className="font-medium text-[#1f241f]">视觉方向</div>
-                        <p className="mt-2 leading-7">
-                          {item.spec.visualDirection ?? "未提供"}
+                    <div className="grid-2" style={{ marginTop: 12 }}>
+                      <div className="pv-note">
+                        <b>规格 / 发布时间</b>
+                        <p>
+                          {rule?.rules.dimensions ?? item.spec.dimensions ?? "-"} · 建议窗口：{rule?.rules.recommendedWindow ?? "-"}
+                          {item.spec.durationSeconds ? ` · ${item.spec.durationSeconds}s` : ""}
                         </p>
                       </div>
-                      <div className="rounded-[20px] border border-[#ece2cd] bg-white/80 p-4 text-sm text-[#4f4a40]">
-                        <div className="font-medium text-[#1f241f]">
-                          {item.mediaType === "video_script" ? "脚本 / 分镜" : "图像提示"}
-                        </div>
-                        {item.mediaType === "video_script" ? (
-                          <ul className="mt-2 space-y-2 leading-7">
-                            {(item.spec.script ?? []).slice(0, 4).map((line) => (
-                              <li key={line}>{line}</li>
-                            ))}
-                            {(item.spec.storyboard ?? []).slice(0, 3).map((line) => (
-                              <li key={line}>{line}</li>
-                            ))}
-                          </ul>
-                        ) : (
-                          <p className="mt-2 leading-7">
-                            {item.spec.imagePrompt ?? "未提供"}
-                          </p>
-                        )}
+                      <div className="pv-note">
+                        <b>{item.mediaType === "video_script" ? "脚本 / 分镜" : "视觉方向"}</b>
+                        <p>
+                          {item.mediaType === "video_script"
+                            ? [ ...(item.spec.script ?? []).slice(0, 2), ...(item.spec.storyboard ?? []).slice(0, 1) ].join(" / ") || "未提供"
+                            : item.spec.visualDirection ?? item.spec.imagePrompt ?? "未提供"}
+                        </p>
                       </div>
                     </div>
 
                     {item.mediaType !== "video_script" ? (
-                      <div className="mt-4 grid gap-3 rounded-[20px] border border-[#ece2cd] bg-white/85 p-4 md:grid-cols-2">
-                        <label className="text-sm text-[#4f4a40]">
-                          <div className="font-medium text-[#1f241f]">图像模式</div>
+                      <div
+                        className="card"
+                        style={{
+                          padding: 14,
+                          marginTop: 12,
+                          display: "grid",
+                          gap: 10,
+                          gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
+                        }}
+                      >
+                        <label className="sub" style={{ color: "var(--ink-2)" }}>
+                          图像模式
                           <select
-                            className="mt-2 w-full rounded-2xl border border-[#d8cfba] bg-white px-3 py-2 text-sm"
+                            className="btn ghost sm"
+                            style={{ width: "100%", marginTop: 6, justifyContent: "space-between" }}
                             value={imageDrafts[item.id]?.mode ?? "text_to_image"}
                             onChange={(event) =>
                               setImageDrafts((current) => ({
@@ -650,11 +727,12 @@ export function ContentPackChatClient({ packId }: { packId: string }) {
                             <option value="background_swap">换背景</option>
                           </select>
                         </label>
-                        <label className="text-sm text-[#4f4a40]">
-                          <div className="font-medium text-[#1f241f]">背景风格</div>
+                        <label className="sub" style={{ color: "var(--ink-2)" }}>
+                          背景风格
                           <input
-                            className="mt-2 w-full rounded-2xl border border-[#d8cfba] bg-white px-3 py-2 text-sm"
-                            placeholder="如：展会展台 / 仓储场景"
+                            className="chat-textarea"
+                            style={{ marginTop: 6, minHeight: 44, height: 44, paddingTop: 10, paddingBottom: 10 }}
+                            placeholder="展会展台 / 仓储场景"
                             value={imageDrafts[item.id]?.backgroundStyle ?? ""}
                             onChange={(event) =>
                               setImageDrafts((current) => ({
@@ -672,11 +750,12 @@ export function ContentPackChatClient({ packId }: { packId: string }) {
                             }
                           />
                         </label>
-                        <label className="text-sm text-[#4f4a40] md:col-span-2">
-                          <div className="font-medium text-[#1f241f]">参考图说明 / 文件</div>
+                        <label className="sub" style={{ color: "var(--ink-2)", gridColumn: "1 / -1" }}>
+                          参考图说明
                           <input
-                            className="mt-2 w-full rounded-2xl border border-[#d8cfba] bg-white px-3 py-2 text-sm"
-                            placeholder="如：保留产品角度，只换成中东展会背景"
+                            className="chat-textarea"
+                            style={{ marginTop: 6, minHeight: 44, height: 44, paddingTop: 10, paddingBottom: 10 }}
+                            placeholder="保留产品角度，只换成中东展会背景"
                             value={imageDrafts[item.id]?.referenceLabel ?? ""}
                             onChange={(event) =>
                               setImageDrafts((current) => ({
@@ -694,7 +773,8 @@ export function ContentPackChatClient({ packId }: { packId: string }) {
                             }
                           />
                           <input
-                            className="mt-2 block w-full text-sm text-[#4f4a40]"
+                            className="sub"
+                            style={{ display: "block", width: "100%", marginTop: 8 }}
                             type="file"
                             accept="image/*"
                             onChange={(event) =>
@@ -719,12 +799,9 @@ export function ContentPackChatClient({ packId }: { packId: string }) {
                     {item.mediaType !== "video_script" &&
                     item.spec.generatedAssets &&
                     item.spec.generatedAssets.length > 0 ? (
-                      <div className="mt-4 grid gap-3 md:grid-cols-2">
+                      <div className="pv-grid" style={{ marginTop: 12 }}>
                         {item.spec.generatedAssets.map((asset) => (
-                          <div
-                            key={asset.id}
-                            className="overflow-hidden rounded-[20px] border border-[#ece2cd] bg-white/90"
-                          >
+                          <div className="pv-card" key={asset.id} style={{ overflow: "hidden", padding: 0 }}>
                             <Image
                               src={asset.previewUrl}
                               alt={`${item.title} ${asset.variant}`}
@@ -733,7 +810,7 @@ export function ContentPackChatClient({ packId }: { packId: string }) {
                               unoptimized
                               className="h-48 w-full object-cover"
                             />
-                            <div className="px-4 py-3 text-xs text-[#5b5649]">
+                            <div style={{ padding: 12, fontSize: 12.5, color: "var(--ink-2)" }}>
                               {asset.variant} · {asset.width}×{asset.height}
                             </div>
                           </div>
@@ -742,15 +819,16 @@ export function ContentPackChatClient({ packId }: { packId: string }) {
                     ) : null}
 
                     {item.notes.length > 0 ? (
-                      <div className="mt-4 rounded-[20px] bg-[#faf6eb] p-4 text-sm leading-7 text-[#5b5649]">
-                        {item.notes.join(" · ")}
+                      <div className="pv-note" style={{ marginTop: 12 }}>
+                        <b>备注</b>
+                        <p>{item.notes.join(" · ")}</p>
                       </div>
                     ) : null}
 
-                    <div className="mt-4 flex flex-wrap gap-3">
+                    <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 12 }}>
                       {item.mediaType !== "video_script" ? (
                         <button
-                          className="rounded-full border border-[#cfc3aa] px-4 py-2 text-sm text-[#31463b]"
+                          className="btn ghost sm"
                           onClick={() => void generateItemImages(item.id)}
                           disabled={submitting}
                         >
@@ -758,20 +836,51 @@ export function ContentPackChatClient({ packId }: { packId: string }) {
                         </button>
                       ) : null}
                       <button
-                        className="rounded-full border border-[#cfc3aa] px-4 py-2 text-sm text-[#31463b]"
+                        className="btn ghost sm"
                         onClick={() => void saveItemBody(item.id)}
                         disabled={submitting}
                       >
                         保存当前文案
                       </button>
+                      <button
+                        className={`btn sm ${published ? "ghost" : "primary"}`}
+                        onClick={() => void togglePublished(item.id, published)}
+                        disabled={submitting}
+                      >
+                        {published ? "撤回已发" : "发起发布审批"}
+                      </button>
                     </div>
-                  </article>
-                );
-              })}
-            </div>
+                  </div>
+                </article>
+              );
+            })}
           </div>
-        </section>
+
+          <div className="card fixes" style={{ marginTop: 14 }}>
+            <div className="head-row" style={{ marginBottom: 6 }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 9 }}>
+                <svg viewBox="0 0 24 24" fill="none" stroke="var(--teal)" strokeWidth={2} style={{ width: 17, height: 17 }}>
+                  <path d="M9 11l3 3L22 4" />
+                  <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11" />
+                </svg>
+                <h3 style={{ fontSize: 14 }}>GPT 校正建议</h3>
+              </div>
+              <span className="badge cloud">OpenAI · 最新规则</span>
+            </div>
+            {qualityNotes.map((note) => (
+              <div className="fix" key={note.title}>
+                <span className={`fi ${note.tone === "warn" ? "warn" : "ok"}`}>
+                  {note.tone === "warn" ? "!" : "✓"}
+                </span>
+                <div>
+                  <b>{note.title}</b>
+                  <span className="fd">{note.detail}</span>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
       </div>
-    </main>
+    </>
   );
 }

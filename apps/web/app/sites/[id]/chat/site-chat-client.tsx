@@ -271,12 +271,12 @@ export function SiteChatClient({ siteId }: { siteId: string }) {
           </div>
         </div>
         <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-          <select
-            className="btn ghost sm"
-            value={selectedTenantId}
-            onChange={(event) => setSelectedTenantId(event.target.value)}
-          >
-            {me?.memberships.map((membership) => (
+            <select
+              className="btn ghost sm"
+              value={selectedTenantId}
+              onChange={(event) => setSelectedTenantId(event.target.value)}
+            >
+            {(me?.memberships ?? []).map((membership) => (
               <option key={membership.tenantId} value={membership.tenantId}>
                 {membership.tenantName}
               </option>
@@ -387,7 +387,7 @@ export function SiteChatClient({ siteId }: { siteId: string }) {
               {currentLocale ? currentLocale.urlPath : "/site/..."}
             </span>
             <div className="langtab">
-              {detail?.locales.map((locale) => (
+              {(detail?.locales ?? []).map((locale) => (
                 <b
                   key={locale.id}
                   className={selectedLocale === locale.locale ? "on" : ""}
@@ -410,20 +410,20 @@ export function SiteChatClient({ siteId }: { siteId: string }) {
                 <div className="pv-cta">{currentLocale.translatedContent.ctaLabel}</div>
 
                 <div className="pv-grid" style={{ marginTop: 18 }}>
-                  {currentLocale.translatedContent.sections.map((section) => (
+                  {(currentLocale.translatedContent.sections ?? []).map((section) => (
                     <article className="pv-card" key={section.id}>
                       <h4>{section.heading}</h4>
                       <p>{section.body}</p>
-                      {section.bullets.length ? (
+                      {(section.bullets ?? []).length ? (
                         <ul className="pv-bullets">
-                          {section.bullets.map((bullet) => (
+                          {(section.bullets ?? []).map((bullet) => (
                             <li key={bullet}>{bullet}</li>
                           ))}
                         </ul>
                       ) : null}
-                      {section.sourceCitations.length ? (
+                      {(section.sourceCitations ?? []).length ? (
                         <div className="chips">
-                          {section.sourceCitations.map((citation) => (
+                          {(section.sourceCitations ?? []).map((citation) => (
                             <span className="chip" key={citation}>
                               {citation}
                             </span>
@@ -434,10 +434,10 @@ export function SiteChatClient({ siteId }: { siteId: string }) {
                   ))}
                 </div>
 
-                {currentLocale.translatedContent.faq.length ? (
+                {(currentLocale.translatedContent.faq ?? []).length ? (
                   <div className="pv-stack" style={{ marginTop: 18 }}>
                     <h4 className="sec" style={{ fontSize: 16 }}>FAQ</h4>
-                    {currentLocale.translatedContent.faq.map((item) => (
+                    {(currentLocale.translatedContent.faq ?? []).map((item) => (
                       <article className="pv-card" key={item.question}>
                         <h4>{item.question}</h4>
                         <p>{item.answer}</p>
@@ -450,10 +450,10 @@ export function SiteChatClient({ siteId }: { siteId: string }) {
                   <div className="pv-panel">
                     <div className="head-row" style={{ marginBottom: 10 }}>
                       <h4 style={{ fontSize: 15 }}>预览体检</h4>
-                      <span className="badge line">{detail?.version?.previewChecks.length ?? 0} 项</span>
+                      <span className="badge line">{detail?.version?.previewChecks?.length ?? 0} 项</span>
                     </div>
                     <div className="pv-stack">
-                      {detail?.version?.previewChecks.map((check) => (
+                      {(detail?.version?.previewChecks ?? []).map((check) => (
                         <div className="pv-note" key={check.key}>
                           <div className="head-row" style={{ marginBottom: 4 }}>
                             <b>{check.label}</b>
@@ -470,11 +470,11 @@ export function SiteChatClient({ siteId }: { siteId: string }) {
                   <div className="pv-panel">
                     <div className="head-row" style={{ marginBottom: 10 }}>
                       <h4 style={{ fontSize: 15 }}>溯源</h4>
-                      <span className="badge line">{detail?.version?.citations.length ?? 0} 条</span>
+                      <span className="badge line">{detail?.version?.citations?.length ?? 0} 条</span>
                     </div>
                     <div className="pv-stack">
-                      {detail?.version?.citations.length ? (
-                        detail.version.citations.map((item) => (
+                      {(detail?.version?.citations ?? []).length ? (
+                        (detail?.version?.citations ?? []).map((item) => (
                           <div className="pv-note" key={item.sourceCitation}>
                             <b>{item.sourceCitation}</b>
                             <p>{item.excerpt}</p>

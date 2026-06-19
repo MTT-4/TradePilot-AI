@@ -23,7 +23,10 @@
     "prisma:generate": "dotenv -e .env -- prisma generate",
     "prisma:migrate": "dotenv -e .env -- prisma migrate dev",
     "prisma:seed": "dotenv -e .env -- prisma db seed",
-    "prisma:assert-tenant": "node tools/check/assert-tenant-fields.mjs"
+    "prisma:assert-tenant": "node tools/check/assert-tenant-fields.mjs",
+    "ops:check-secrets": "node tools/check/assert-nonplaceholder-secrets.mjs",
+    "ops:backup-local": "bash tools/ops/backup_local.sh",
+    "ops:restore-local": "bash tools/ops/restore_local.sh"
   },
   "dependencies": {
     "@prisma/client": "^6.9.0"

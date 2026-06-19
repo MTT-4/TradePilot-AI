@@ -24,6 +24,23 @@ type DataRequestsResponse = {
   items: DataRequestItem[];
 };
 
+type MemberItem = {
+  id: string;
+  role: string;
+  status: string;
+  createdAt: string;
+  updatedAt: string;
+  user: {
+    id: string;
+    email: string;
+    name: string | null;
+  };
+};
+
+type MembersResponse = {
+  items: MemberItem[];
+};
+
 const ADMIN_ROLES = new Set(["owner", "admin"]);
 
 async function fetchDataRequests(tenantId: string) {
@@ -39,6 +56,21 @@ async function fetchDataRequests(tenantId: string) {
   }
 
   return (await response.json()) as DataRequestsResponse;
+}
+
+async function fetchMembers(tenantId: string) {
+  const response = await fetch("/api/members", {
+    headers: {
+      "X-Tenant-Id": tenantId,
+    },
+  });
+
+  if (!response.ok) {
+    const payload = await response.json().catch(() => null);
+    throw new Error(payload?.error?.message ?? "加载成员失败。");
+  }
+
+  return (await response.json()) as MembersResponse;
 }
 
 function formatTime(value: string | null) {
@@ -86,16 +118,52 @@ function readScopeText(scope: Record<string, unknown> | null) {
   return `${channel} · ${subjectEmail}${note ? ` · ${note}` : ""}`;
 }
 
+function formatMemberRole(role: string) {
+  switch (role) {
+    case "owner":
+      return "Owner";
+    case "admin":
+      return "Admin";
+    case "operator":
+      return "Operator";
+    case "sales":
+      return "Sales";
+    case "viewer":
+      return "Viewer";
+    default:
+      return role;
+  }
+}
+
+function formatMemberStatus(status: string) {
+  switch (status) {
+    case "active":
+      return "启用";
+    case "invited":
+      return "已邀请";
+    case "suspended":
+      return "停用";
+    default:
+      return status;
+  }
+}
+
 export function SettingsClient() {
   const [me, setMe] = useState<MeResponse | null>(null);
   const [selectedTenantId, setSelectedTenantId] = useState("");
   const [items, setItems] = useState<DataRequestItem[]>([]);
+  const [members, setMembers] = useState<MemberItem[]>([]);
   const [requestType, setRequestType] = useState<"export" | "delete">("export");
   const [channel, setChannel] = useState<"gdpr" | "pipl">("gdpr");
   const [subjectEmail, setSubjectEmail] = useState("");
   const [note, setNote] = useState("");
+  const [inviteEmail, setInviteEmail] = useState("");
+  const [inviteRole, setInviteRole] = useState<
+    "admin" | "operator" | "sales" | "viewer"
+  >("viewer");
   const [submitting, setSubmitting] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [membersSubmitting, setMembersSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
 
@@ -120,6 +188,22 @@ export function SettingsClient() {
     const payload = await fetchDataRequests(tenantId);
     setItems(payload.items);
     setLoading(false);
+  }
+
+  async function refreshMembers(tenantId = selectedTenantId) {
+    if (!tenantId) {
+      setMembers([]);
+      return;
+    }
+
+    if (!canManageCompliance) {
+      return;
+    }
+
+    setError(null);
+
+    const payload = await fetchMembers(tenantId);
+    setMembers(payload.items);
   }
 
   async function handleCreateRequest() {
@@ -199,6 +283,85 @@ export function SettingsClient() {
     }
   }
 
+  async function handleInviteMember() {
+    if (!selectedTenantId || !inviteEmail.trim()) {
+      setError("请填写成员邮箱。");
+      return;
+    }
+
+    setMembersSubmitting(true);
+    setError(null);
+    setSuccess(null);
+
+    try {
+      const response = await fetch("/api/members", {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          "X-Tenant-Id": selectedTenantId,
+        },
+        body: JSON.stringify({
+          email: inviteEmail.trim(),
+          role: inviteRole,
+        }),
+      });
+
+      if (!response.ok) {
+        const payload = await response.json().catch(() => null);
+        throw new Error(payload?.error?.message ?? "邀请成员失败。");
+      }
+
+      setSuccess("成员已登记邀请。");
+      setInviteEmail("");
+      setInviteRole("viewer");
+      await refreshMembers();
+    } catch (requestError) {
+      setError(requestError instanceof Error ? requestError.message : "邀请成员失败。");
+    } finally {
+      setMembersSubmitting(false);
+    }
+  }
+
+  async function handleUpdateMember(params: {
+    memberId: string;
+    role?: string;
+    status?: string;
+  }) {
+    if (!selectedTenantId) {
+      return;
+    }
+
+    setMembersSubmitting(true);
+    setError(null);
+    setSuccess(null);
+
+    try {
+      const response = await fetch(`/api/members/${params.memberId}`, {
+        method: "PATCH",
+        headers: {
+          "content-type": "application/json",
+          "X-Tenant-Id": selectedTenantId,
+        },
+        body: JSON.stringify({
+          role: params.role,
+          status: params.status,
+        }),
+      });
+
+      if (!response.ok) {
+        const payload = await response.json().catch(() => null);
+        throw new Error(payload?.error?.message ?? "更新成员失败。");
+      }
+
+      setSuccess("成员权限已更新。");
+      await refreshMembers();
+    } catch (requestError) {
+      setError(requestError instanceof Error ? requestError.message : "更新成员失败。");
+    } finally {
+      setMembersSubmitting(false);
+    }
+  }
+
   useEffect(() => {
     let active = true;
 
@@ -243,18 +406,19 @@ export function SettingsClient() {
       return;
     }
 
-    void fetchDataRequests(selectedTenantId)
-      .then((payload) => {
+    void Promise.all([fetchDataRequests(selectedTenantId), fetchMembers(selectedTenantId)])
+      .then(([requestsPayload, membersPayload]) => {
         if (!active) {
           return;
         }
 
         setError(null);
-        setItems(payload.items);
+        setItems(requestsPayload.items);
+        setMembers(membersPayload.items);
       })
       .catch((loadError) => {
         if (active) {
-          setError(loadError instanceof Error ? loadError.message : "加载数据请求失败。");
+          setError(loadError instanceof Error ? loadError.message : "加载设置数据失败。");
         }
       })
       .finally(() => {
@@ -273,6 +437,8 @@ export function SettingsClient() {
   const deleteCount = items.filter((item) => item.type === "delete").length;
   const visibleItems = canManageCompliance ? items : [];
   const visibleLoading = canManageCompliance ? loading : false;
+  const visibleMembers = canManageCompliance ? members : [];
+  const visibleMembersLoading = canManageCompliance ? loading : false;
 
   return (
     <>
@@ -357,6 +523,7 @@ export function SettingsClient() {
           <a href="#requests" className="on">
             数据请求
           </a>
+          <a href="#members">成员权限</a>
           <a href="#roles">权限矩阵</a>
           <a href="#audit">审计基线</a>
         </div>
@@ -508,6 +675,148 @@ export function SettingsClient() {
             </div>
           </div>
 
+          <div className="card set-block" id="members">
+            <div className="head-row" style={{ marginBottom: 10 }}>
+              <div>
+                <h3>成员与角色</h3>
+                <div className="sub">复用现有成员接口，支持邀请、改角色、停用，所有变更写审计日志。</div>
+              </div>
+              <span className="badge line">{visibleMembersLoading ? "加载中…" : `${visibleMembers.length} 人`}</span>
+            </div>
+
+            {canManageCompliance ? (
+              <>
+                <div
+                  style={{
+                    display: "grid",
+                    gridTemplateColumns: "minmax(0, 1.6fr) minmax(0, 1fr) auto",
+                    gap: 14,
+                    alignItems: "end",
+                    marginBottom: 18,
+                  }}
+                >
+                  <div className="field" style={{ marginBottom: 0 }}>
+                    <label>邀请邮箱</label>
+                    <input
+                      type="email"
+                      value={inviteEmail}
+                      onChange={(event) => setInviteEmail(event.target.value)}
+                      placeholder="new-user@example.com"
+                    />
+                  </div>
+                  <div className="field" style={{ marginBottom: 0 }}>
+                    <label>初始角色</label>
+                    <select
+                      value={inviteRole}
+                      onChange={(event) =>
+                        setInviteRole(
+                          event.target.value as "admin" | "operator" | "sales" | "viewer",
+                        )
+                      }
+                    >
+                      <option value="viewer">Viewer</option>
+                      <option value="sales">Sales</option>
+                      <option value="operator">Operator</option>
+                      <option value="admin">Admin</option>
+                    </select>
+                  </div>
+                  <button
+                    type="button"
+                    className="btn primary sm"
+                    disabled={membersSubmitting || !inviteEmail.trim()}
+                    onClick={() => void handleInviteMember()}
+                  >
+                    {membersSubmitting ? "提交中…" : "邀请成员"}
+                  </button>
+                </div>
+
+                <div className="card" style={{ padding: "6px 18px" }}>
+                  <table className="tbl">
+                    <thead>
+                      <tr>
+                        <th>成员</th>
+                        <th>角色</th>
+                        <th>状态</th>
+                        <th>加入时间</th>
+                        <th>操作</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {visibleMembers.map((member) => (
+                        <tr key={member.id}>
+                          <td>
+                            <div style={{ fontWeight: 600 }}>{member.user.name ?? member.user.email}</div>
+                            <div className="sub">{member.user.email}</div>
+                          </td>
+                          <td>{formatMemberRole(member.role)}</td>
+                          <td>{formatMemberStatus(member.status)}</td>
+                          <td>{formatTime(member.createdAt)}</td>
+                          <td>
+                            <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                              {member.role !== "owner" ? (
+                                <>
+                                  <select
+                                    className="btn ghost sm"
+                                    defaultValue={member.role}
+                                    onChange={(event) =>
+                                      void handleUpdateMember({
+                                        memberId: member.id,
+                                        role: event.target.value,
+                                      })
+                                    }
+                                    disabled={membersSubmitting}
+                                  >
+                                    <option value="viewer">Viewer</option>
+                                    <option value="sales">Sales</option>
+                                    <option value="operator">Operator</option>
+                                    <option value="admin">Admin</option>
+                                  </select>
+                                  <select
+                                    className="btn ghost sm"
+                                    defaultValue={member.status}
+                                    onChange={(event) =>
+                                      void handleUpdateMember({
+                                        memberId: member.id,
+                                        status: event.target.value,
+                                      })
+                                    }
+                                    disabled={membersSubmitting}
+                                  >
+                                    <option value="invited">已邀请</option>
+                                    <option value="active">启用</option>
+                                    <option value="suspended">停用</option>
+                                  </select>
+                                </>
+                              ) : (
+                                <span className="sub">Owner 只能由 Owner 管理</span>
+                              )}
+                            </div>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                  {!visibleMembers.length ? (
+                    <div className="sub" style={{ padding: "12px 0" }}>
+                      当前租户还没有额外成员记录。
+                    </div>
+                  ) : null}
+                </div>
+              </>
+            ) : (
+              <div
+                className="card"
+                style={{
+                  padding: "12px 14px",
+                  background: "var(--surface-2)",
+                  borderStyle: "dashed",
+                }}
+              >
+                只有 Owner / Admin 可以查看和管理成员权限。
+              </div>
+            )}
+          </div>
+
           <div className="card set-block" id="roles">
             <div className="head-row" style={{ marginBottom: 10 }}>
               <div>
@@ -586,6 +895,10 @@ export function SettingsClient() {
               `content_publish_requested` / `content_item_marked_published`
               <br />
               `reply_send_requested` / `reply_sent` / `hitl_task_approved`
+              <br />
+              `membership_role_updated` / `membership_status_updated`
+              <br />
+              运维脚本：`npm run ops:backup-local` / `npm run ops:restore-local` / `npm run ops:check-secrets`
             </div>
           </div>
         </div>

@@ -33,7 +33,7 @@ jobs:
     runs-on: ubuntu-latest
     services:
       postgres:
-        image: postgres:16
+        image: pgvector/pgvector:pg16
         env:
           POSTGRES_DB: tradepilot
           POSTGRES_USER: tradepilot
@@ -109,6 +109,9 @@ jobs:
             sleep 2
           done
           exit 1
+
+      - name: Run secret source check
+        run: npm run ops:check-secrets
 
       - name: Generate Prisma client
         run: npm run prisma:generate
@@ -137,7 +140,7 @@ jobs:
     runs-on: ubuntu-latest
     services:
       postgres:
-        image: postgres:16
+        image: pgvector/pgvector:pg16
         env:
           POSTGRES_DB: tradepilot
           POSTGRES_USER: tradepilot
@@ -213,6 +216,9 @@ jobs:
             sleep 2
           done
           exit 1
+
+      - name: Run secret source check
+        run: npm run ops:check-secrets
 
       - name: Generate Prisma client
         run: npm run prisma:generate

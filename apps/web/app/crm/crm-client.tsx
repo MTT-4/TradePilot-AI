@@ -1,6 +1,5 @@
 "use client";
 
-import Link from "next/link";
 import { useEffect, useState } from "react";
 import {
   fetchCurrentMe,
@@ -150,140 +149,178 @@ export function CrmClient() {
     };
   }, [selectedTenantId]);
 
+  const stageColumns = STAGES.map((stage) => ({
+    ...stage,
+    items: opportunities.filter((item) => item.stage.toLowerCase() === stage.key),
+  }));
+  const otherOpportunities = opportunities.filter(
+    (item) => !STAGES.some((stage) => stage.key === item.stage.toLowerCase()),
+  );
+
   return (
-    <main className="min-h-screen bg-[linear-gradient(180deg,#faf7ee_0%,#efe4d0_100%)] px-4 py-6 md:px-8">
-      <div className="mx-auto flex max-w-7xl flex-col gap-6">
-        <section className="rounded-[30px] border border-[#ddd3bd] bg-white/92 p-6 shadow-[0_22px_90px_rgba(50,41,22,0.08)]">
-          <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
-            <div>
-              <p className="font-mono text-xs uppercase tracking-[0.28em] text-[#2c6d56]">
-                T6.1 / CRM
-              </p>
-              <h1 className="mt-3 text-3xl font-semibold tracking-tight text-[#1f241f] md:text-4xl">
-                询盘与归因
-              </h1>
-              <p className="mt-2 text-sm leading-7 text-[#655f52]">
-                从询盘、线索到商机，保留平台、内容、追踪链接的归因链路。
-              </p>
-            </div>
-            <div className="flex flex-wrap items-center gap-3">
-              <Link
-                href="/"
-                className="rounded-full border border-[#ddd3bd] bg-white px-4 py-2 text-sm text-[#1f241f]"
-              >
-                返回工作台
-              </Link>
-              <select
-                className="rounded-full border border-[#ddd3bd] bg-white px-4 py-2 text-sm"
-                value={selectedTenantId}
-                onChange={(event) => {
-                  setLoading(true);
-                  setSelectedTenantId(event.target.value);
-                }}
-              >
-                {me?.memberships.map((membership) => (
-                  <option key={membership.tenantId} value={membership.tenantId}>
-                    {membership.tenantName}
-                  </option>
-                ))}
-              </select>
-            </div>
+    <>
+      <div className="head-row">
+        <div>
+          <div className="eyebrow">CRM 管道</div>
+          <h2 className="sec" style={{ marginTop: 4 }}>
+            商机 · 阶段推进 · 来源归因
+          </h2>
+          <div className="sub" style={{ marginTop: 4 }}>
+            从询盘、线索到商机，保留平台、内容、追踪链接的归因链路。
           </div>
-        </section>
-
-        {error ? (
-          <section className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
-            {error}
-          </section>
+        </div>
+        {me && me.memberships.length > 0 ? (
+          <select
+            className="btn ghost sm"
+            value={selectedTenantId}
+            onChange={(event) => {
+              setLoading(true);
+              setSelectedTenantId(event.target.value);
+            }}
+          >
+            {me.memberships.map((membership) => (
+              <option key={membership.tenantId} value={membership.tenantId}>
+                {membership.tenantName}
+              </option>
+            ))}
+          </select>
         ) : null}
+      </div>
 
-        <section className="grid gap-4 md:grid-cols-3">
-          <div className="rounded-[26px] border border-[#ddd3bd] bg-white/90 p-5">
-            <div className="text-xs uppercase tracking-[0.22em] text-[#7b745f]">线索数</div>
-            <div className="mt-4 text-4xl font-semibold text-[#1f241f]">{leads.length}</div>
-          </div>
-          <div className="rounded-[26px] border border-[#ddd3bd] bg-white/90 p-5">
-            <div className="text-xs uppercase tracking-[0.22em] text-[#7b745f]">商机数</div>
-            <div className="mt-4 text-4xl font-semibold text-[#1f241f]">{opportunities.length}</div>
-          </div>
-          <div className="rounded-[26px] border border-[#ddd3bd] bg-white/90 p-5">
-            <div className="text-xs uppercase tracking-[0.22em] text-[#7b745f]">高分线索</div>
-            <div className="mt-4 text-4xl font-semibold text-[#1f241f]">
-              {leads.filter((lead) => lead.score === "a").length}
-            </div>
-          </div>
-        </section>
+      {error ? (
+        <div
+          className="card"
+          style={{
+            padding: "12px 16px",
+            marginBottom: 18,
+            borderColor: "var(--warn-soft)",
+            background: "var(--warn-soft)",
+            color: "var(--warn)",
+            fontSize: 13,
+          }}
+        >
+          {error}
+        </div>
+      ) : null}
 
-        <section className="grid gap-4 lg:grid-cols-[1.15fr_0.85fr]">
-          <div className="rounded-[30px] border border-[#ddd3bd] bg-white/90 p-5">
-            <div className="mb-4 flex items-center justify-between">
-              <h2 className="text-lg font-semibold text-[#1f241f]">最新线索</h2>
-              <span className="text-xs text-[#6a6457]">{loading ? "加载中…" : `${leads.length} 条`}</span>
-            </div>
-            <div className="space-y-3">
-              {leads.map((lead) => (
-                <article key={lead.id} className="rounded-[24px] border border-[#ece5d3] bg-[#fffdf8] p-4">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <span className="rounded-full bg-[#eef5f0] px-3 py-1 text-xs text-[#214735]">
-                      {lead.sourceAttribution.platform?.toUpperCase() ?? "UNKNOWN"}
-                    </span>
-                    <span className="rounded-full border border-[#ddd3bd] px-3 py-1 text-xs text-[#6a6457]">
-                      {lead.status}
-                    </span>
-                    {lead.score ? (
-                      <span className="rounded-full bg-[#f8efe1] px-3 py-1 text-xs text-[#8b5a24]">
-                        评分 {lead.score.toUpperCase()}
-                      </span>
-                    ) : null}
-                  </div>
-                  <h3 className="mt-3 text-lg font-semibold text-[#1f241f]">{lead.companyName}</h3>
-                  <div className="mt-2 text-sm leading-6 text-[#655f52]">
-                    内容：{lead.sourceAttribution.contentTitle ?? "未绑定"} · Tracking：
-                    {lead.sourceAttribution.trackingSlug ?? "无"}
-                  </div>
-                  <div className="mt-2 text-sm leading-6 text-[#655f52]">
-                    最新询盘：{lead.latestInquiry?.subject ?? "无"} ·
-                    {lead.latestInquiry ? ` ${formatTime(lead.latestInquiry.createdAt)}` : " 暂无时间"}
-                  </div>
-                </article>
-              ))}
-              {!leads.length ? (
-                <div className="rounded-2xl border border-dashed border-[#ddd3bd] bg-[#faf6eb] px-4 py-5 text-sm text-[#6a6457]">
-                  当前没有线索数据。
-                </div>
-              ) : null}
-            </div>
-          </div>
+      <div className="stat-strip" style={{ gridTemplateColumns: "repeat(3, 1fr)" }}>
+        <div className="stat">
+          <div className="v">{leads.length}</div>
+          <div className="l">线索数</div>
+        </div>
+        <div className="stat">
+          <div className="v">{opportunities.length}</div>
+          <div className="l">商机数</div>
+        </div>
+        <div className="stat">
+          <div className="v">{leads.filter((lead) => lead.score === "a").length}</div>
+          <div className="l">A 级线索</div>
+        </div>
+      </div>
 
-          <div className="rounded-[30px] border border-[#ddd3bd] bg-white/90 p-5">
-            <div className="mb-4 flex items-center justify-between">
-              <h2 className="text-lg font-semibold text-[#1f241f]">商机列表</h2>
-              <span className="text-xs text-[#6a6457]">{opportunities.length} 条</span>
-            </div>
-            <div className="space-y-3">
-              {opportunities.map((opportunity) => (
-                <article key={opportunity.id} className="rounded-[24px] border border-[#ece5d3] bg-[#fffdf8] p-4">
-                  <div className="text-xs uppercase tracking-[0.22em] text-[#7b745f]">
-                    {opportunity.stage}
-                  </div>
-                  <h3 className="mt-2 text-lg font-semibold text-[#1f241f]">{opportunity.name}</h3>
-                  <div className="mt-2 text-sm text-[#655f52]">{opportunity.companyName}</div>
-                  <div className="mt-2 text-sm text-[#655f52]">
+      <div className="head-row" style={{ marginBottom: 10 }}>
+        <h3 style={{ fontSize: 16 }}>商机管道</h3>
+        <span className="badge line">{loading ? "加载中…" : `${opportunities.length} 个商机`}</span>
+      </div>
+      <div className="kanban">
+        {stageColumns.map((column) => {
+          const items =
+            column.key === "lost"
+              ? [...column.items, ...otherOpportunities]
+              : column.items;
+          return (
+            <div className="kcol" key={column.key}>
+              <h4>
+                {column.label}
+                <span className="cnt">{items.length}</span>
+              </h4>
+              {items.map((opportunity) => (
+                <div className="kc" key={opportunity.id}>
+                  <div className="co">{opportunity.companyName}</div>
+                  <div className="meta">{opportunity.name}</div>
+                  <div className="val">
                     {opportunity.valueAmount
                       ? `${opportunity.currency} ${opportunity.valueAmount}`
-                      : "暂未填写金额"}
+                      : "待报价"}
                   </div>
-                </article>
-              ))}
-              {!opportunities.length ? (
-                <div className="rounded-2xl border border-dashed border-[#ddd3bd] bg-[#faf6eb] px-4 py-5 text-sm text-[#6a6457]">
-                  当前没有商机数据。
                 </div>
-              ) : null}
+              ))}
             </div>
-          </div>
-        </section>
+          );
+        })}
       </div>
-    </main>
+
+      <div className="head-row" style={{ marginTop: 22, marginBottom: 10 }}>
+        <h3 style={{ fontSize: 16 }}>询盘线索池</h3>
+        <span className="badge line">{leads.length} 条</span>
+      </div>
+      <div className="card" style={{ padding: "6px 18px" }}>
+        <table className="tbl">
+          <thead>
+            <tr>
+              <th>客户</th>
+              <th>评分</th>
+              <th>来源（平台 → 内容）</th>
+              <th>最新询盘</th>
+              <th>状态</th>
+            </tr>
+          </thead>
+          <tbody>
+            {leads.map((lead) => (
+              <tr key={lead.id}>
+                <td>
+                  <b>{lead.companyName}</b>
+                  {lead.country ? (
+                    <span className="sub" style={{ marginLeft: 6 }}>{lead.country}</span>
+                  ) : null}
+                </td>
+                <td>
+                  {lead.score ? (
+                    <span className={`badge ${lead.score === "a" ? "good" : "line"}`}>
+                      {lead.score.toUpperCase()} 级
+                    </span>
+                  ) : (
+                    <span className="sub">—</span>
+                  )}
+                </td>
+                <td>
+                  {(lead.sourceAttribution.platform ?? "unknown").toUpperCase()} ·{" "}
+                  {lead.sourceAttribution.contentTitle ?? "未绑定"}
+                  {lead.sourceAttribution.trackingSlug ? (
+                    <span className="link" style={{ marginLeft: 6 }}>
+                      {lead.sourceAttribution.trackingSlug}
+                    </span>
+                  ) : null}
+                </td>
+                <td>
+                  {lead.latestInquiry?.subject ?? "无"}
+                  {lead.latestInquiry ? (
+                    <div className="sub">{formatTime(lead.latestInquiry.createdAt)}</div>
+                  ) : null}
+                </td>
+                <td>
+                  <span className={`st ${lead.status}`}>{lead.status}</span>
+                </td>
+              </tr>
+            ))}
+            {!leads.length ? (
+              <tr>
+                <td colSpan={5}>
+                  <div className="sub" style={{ padding: "12px 0" }}>当前没有线索数据。</div>
+                </td>
+              </tr>
+            ) : null}
+          </tbody>
+        </table>
+      </div>
+    </>
   );
 }
+
+const STAGES: Array<{ key: string; label: string }> = [
+  { key: "new", label: "新建" },
+  { key: "contacted", label: "已联系" },
+  { key: "quoted", label: "已报价" },
+  { key: "won", label: "赢单" },
+  { key: "lost", label: "丢单" },
+];

@@ -342,306 +342,298 @@ export function SitesClient() {
   );
 
   return (
-    <main className="min-h-screen bg-[linear-gradient(180deg,#faf8f1_0%,#efe9d8_100%)] px-4 py-6 md:px-8">
-      <div className="mx-auto flex max-w-7xl flex-col gap-6">
-        <section className="rounded-[28px] border border-[#ddd3bd] bg-white/90 p-6 shadow-[0_20px_90px_rgba(50,41,22,0.08)]">
-          <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
-            <div>
-              <p className="font-mono text-xs uppercase tracking-[0.28em] text-[#2c6d56]">
-                Site Management
-              </p>
-              <h1 className="mt-2 text-3xl font-semibold tracking-tight text-[#1f241f] md:text-4xl">
-                站点管理 + HITL 发布
-              </h1>
-              <p className="mt-2 text-sm leading-7 text-[#5f594c]">
-                草稿不能直接对外。发布必须先建 `HITL` 任务，审批通过后才会开放 `/site/:slug/:locale`。
-              </p>
-            </div>
-            <select
-              className="rounded-2xl border border-[#ddd3bd] bg-white px-4 py-2 text-sm"
-              value={selectedTenantId}
-              onChange={(event) => setSelectedTenantId(event.target.value)}
-            >
-              {me?.memberships.map((membership) => (
-                <option key={membership.tenantId} value={membership.tenantId}>
-                  {membership.tenantName}
-                </option>
-              ))}
-            </select>
+    <>
+      <div className="head-row">
+        <div>
+          <div className="eyebrow">站点管理</div>
+          <h2 className="sec" style={{ marginTop: 4 }}>
+            站点 · 版本 · 上下线
+          </h2>
+          <div className="sub" style={{ marginTop: 4 }}>
+            草稿不能直接对外，发布需经 HITL 审批通过后才会开放公开页。
           </div>
-        </section>
-
-        {error ? (
-          <section className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
-            {error}
-          </section>
+        </div>
+        {me && me.memberships.length > 0 ? (
+          <select
+            className="btn ghost sm"
+            value={selectedTenantId}
+            onChange={(event) => setSelectedTenantId(event.target.value)}
+          >
+            {me.memberships.map((membership) => (
+              <option key={membership.tenantId} value={membership.tenantId}>
+                {membership.tenantName}
+              </option>
+            ))}
+          </select>
         ) : null}
+      </div>
 
-        <section className="grid gap-6 lg:grid-cols-[0.9fr_1.1fr]">
-          <div className="rounded-[28px] border border-[#ddd3bd] bg-white/90 p-5 shadow-[0_18px_70px_rgba(50,41,22,0.08)]">
-            <div className="mb-4 flex items-center justify-between">
-              <h2 className="text-lg font-semibold text-[#1f241f]">站点列表</h2>
-              <span className="text-xs text-[#6a6457]">{sites.length} 个站点</span>
-            </div>
-            <div className="space-y-3">
-              {sites.map((site) => (
-                <button
-                  key={site.id}
-                  type="button"
-                  className={`w-full rounded-[24px] border p-4 text-left transition ${
-                    site.id === selectedSiteId
-                      ? "border-[#1f6a52] bg-[#f1f8f3]"
-                      : "border-[#ece5d3] bg-[#fffdf8]"
-                  }`}
-                  onClick={() => setSelectedSiteId(site.id)}
-                >
-                  <div className="flex items-start justify-between gap-4">
-                    <div>
-                      <div className="text-base font-semibold text-[#1f241f]">{site.name}</div>
-                      <div className="mt-1 text-sm text-[#655f52]">
-                        {site.product ?? "Site"} · v{site.versionNumber} · {site.locales.map((item) => item.locale.toUpperCase()).join(" ")}
-                      </div>
-                    </div>
-                    <span className="rounded-full border border-[#ddd3bd] bg-white px-3 py-1 text-xs uppercase text-[#5d584c]">
-                      {site.status}
-                    </span>
-                  </div>
-                  <div className="mt-3 text-xs text-[#756f61]">
-                    {site.publicUrl ?? site.previewUrl}
-                  </div>
-                  {site.pendingAutofillCount > 0 ? (
-                    <div className="mt-2 text-xs text-[#2c6d56]">
-                      {site.pendingAutofillCount} 条自动补全候选待处理
-                    </div>
-                  ) : null}
-                </button>
-              ))}
-              {!sites.length ? (
-                <div className="rounded-3xl border border-dashed border-[#ddd3bd] bg-[#faf6eb] px-4 py-6 text-sm text-[#6a6457]">
-                  {loading ? "加载中…" : "当前租户还没有站点。"}
-                </div>
-              ) : null}
-            </div>
-          </div>
+      {error ? (
+        <div
+          className="card"
+          style={{
+            padding: "12px 16px",
+            marginBottom: 18,
+            borderColor: "var(--warn-soft)",
+            background: "var(--warn-soft)",
+            color: "var(--warn)",
+            fontSize: 13,
+          }}
+        >
+          {error}
+        </div>
+      ) : null}
 
-          <div className="space-y-6">
-            <section className="rounded-[28px] border border-[#ddd3bd] bg-white/90 p-5 shadow-[0_18px_70px_rgba(50,41,22,0.08)]">
-              <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
-                <div>
-                  <h2 className="text-xl font-semibold text-[#1f241f]">
-                    {selectedSite?.name ?? "站点详情"}
-                  </h2>
-                  <p className="mt-1 text-sm text-[#655f52]">
-                    {selectedSite?.product ?? "-"} · {selectedSite?.market ?? "-"}
-                  </p>
+      <div className="split" style={{ gridTemplateColumns: "0.9fr 1.1fr" }}>
+        <div className="card" style={{ padding: "8px 20px" }}>
+          {sites.map((site) => (
+            <div
+              className="row-card"
+              key={site.id}
+              style={{ cursor: "pointer" }}
+              onClick={() => setSelectedSiteId(site.id)}
+            >
+              <div className="grow">
+                <div className="nm">
+                  {site.name}
+                  <span>
+                    {site.locales.map((item) => item.locale.toUpperCase()).join(" ")} · v
+                    {site.versionNumber}
+                  </span>
                 </div>
-                <div className="flex flex-wrap gap-2">
-                  <a
-                    href={selectedSite ? `/sites/${selectedSite.id}/chat` : "#"}
-                    className="rounded-full border border-[#ddd3bd] bg-white px-4 py-2 text-sm text-[#1f241f]"
-                  >
+                <div className="sub" style={{ marginTop: 3 }}>
+                  {site.publicUrl ?? site.previewUrl}
+                </div>
+                {site.pendingAutofillCount > 0 ? (
+                  <div className="sub" style={{ marginTop: 2, color: "var(--teal)" }}>
+                    {site.pendingAutofillCount} 条自动补全候选待处理
+                  </div>
+                ) : null}
+              </div>
+              <span className={`st ${site.status}`}>{site.status}</span>
+              {site.id === selectedSiteId ? <span className="badge good">当前</span> : null}
+            </div>
+          ))}
+          {!sites.length ? (
+            <div className="empty" style={{ padding: "32px 12px" }}>
+              <div className="t">{loading ? "加载中…" : "当前租户还没有站点"}</div>
+              <div className="s">在「AI 建站」里对话生成第一个站点。</div>
+            </div>
+          ) : null}
+        </div>
+
+        <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
+          <div className="card" style={{ padding: "18px 20px" }}>
+            <div className="head-row" style={{ marginBottom: 10 }}>
+              <div>
+                <div className="eyebrow">站点详情</div>
+                <h3 style={{ fontSize: 16, marginTop: 3 }}>{selectedSite?.name ?? "未选择站点"}</h3>
+                <div className="sub" style={{ marginTop: 2 }}>
+                  {selectedSite?.product ?? "-"} · {selectedSite?.market ?? "-"}
+                </div>
+              </div>
+              <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                {selectedSite ? (
+                  <a className="btn ghost sm" href={`/sites/${selectedSite.id}/chat`}>
                     对话编辑
                   </a>
-                  {selectedSite?.publicUrl ? (
-                    <a
-                      href={selectedSite.publicUrl}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="rounded-full border border-[#ddd3bd] bg-white px-4 py-2 text-sm text-[#1f241f]"
-                    >
-                      打开线上页
-                    </a>
-                  ) : null}
+                ) : null}
+                {selectedSite?.publicUrl ? (
+                  <a className="btn ghost sm" href={selectedSite.publicUrl} target="_blank" rel="noreferrer">
+                    打开线上页
+                  </a>
+                ) : null}
+              </div>
+            </div>
+
+            {selectedSite ? (
+              <>
+                <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 14 }}>
+                  <HitlAction
+                    tenantId={selectedTenantId}
+                    endpoint={`/api/sites/${selectedSite.id}/publish-request`}
+                    idleLabel="发起上线审批"
+                    busyLabel="提交中…"
+                    disabled={!canEdit(currentMembership?.role)}
+                    onError={(message) => setError(message || null)}
+                    onSuccess={() => refreshCurrent()}
+                  />
+                  <button
+                    type="button"
+                    className="btn ghost sm"
+                    disabled={!canEdit(currentMembership?.role) || busyKey === "offline"}
+                    onClick={() => void postJson(`/api/sites/${selectedSite.id}/status`, { status: "offline" }, "offline")}
+                  >
+                    立即下线
+                  </button>
+                  <button
+                    type="button"
+                    className="btn ghost sm"
+                    disabled={!canEdit(currentMembership?.role) || busyKey === "autofill-generate"}
+                    onClick={() => void postJson(`/api/sites/${selectedSite.id}/autofill`, { action: "generate" }, "autofill-generate")}
+                  >
+                    {busyKey === "autofill-generate" ? "生成中…" : "生成自动补全候选"}
+                  </button>
+                </div>
+
+                <div className="stat-strip" style={{ gridTemplateColumns: "1fr 1fr", marginBottom: 0 }}>
+                  <div className="stat">
+                    <div className="v" style={{ fontSize: 16 }}>{selectedSite.status}</div>
+                    <div className="l">状态</div>
+                  </div>
+                  <div className="stat">
+                    <div className="v">v{selectedSite.versionNumber}</div>
+                    <div className="l">当前版本</div>
+                  </div>
+                </div>
+              </>
+            ) : null}
+          </div>
+
+          <div className="card" style={{ padding: "18px 20px" }}>
+            <div className="head-row" style={{ marginBottom: 8 }}>
+              <h3 style={{ fontSize: 15 }}>审批队列</h3>
+              <span className="badge manual">{relatedHitl.length} 条</span>
+            </div>
+            {relatedHitl.map((task) => (
+              <div className="hitl-item" key={task.id}>
+                <div className="ic teal">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
+                    <rect x="3" y="4" width="18" height="14" rx="2" />
+                  </svg>
+                </div>
+                <div className="grow">
+                  <div className="t">{formatTaskType(task.type)}</div>
+                  <div className="m">
+                    {task.payload.mode === "autofill_candidate" ? "自动补全确认上线" : "站点上线"} ·{" "}
+                    {formatTime(task.createdAt)}
+                  </div>
+                </div>
+                {canApprove(currentMembership?.role) ? (
+                  <HitlAction
+                    tenantId={selectedTenantId}
+                    endpoint={`/api/hitl/${task.id}/approve`}
+                    idleLabel="批准"
+                    busyLabel="审批中…"
+                    onError={(message) => setError(message || null)}
+                    onSuccess={() => refreshCurrent()}
+                  />
+                ) : (
+                  <span className="badge line">等待管理员</span>
+                )}
+              </div>
+            ))}
+            {!relatedHitl.length ? (
+              <div className="sub" style={{ padding: "10px 0" }}>当前站点没有待审批的发布任务。</div>
+            ) : null}
+          </div>
+
+          <div className="card" style={{ padding: "18px 20px" }}>
+            <div className="head-row" style={{ marginBottom: 8 }}>
+              <h3 style={{ fontSize: 15 }}>版本回滚</h3>
+              <span className="badge line">{detail?.versionHistory.length ?? 0} 个版本</span>
+            </div>
+            {detail?.versionHistory.map((version) => (
+              <div className="row-card" key={version.id}>
+                <div className="grow">
+                  <div className="nm">v{version.versionNumber}</div>
+                  <div className="sub" style={{ marginTop: 2 }}>
+                    {version.note ?? "无备注"} · {formatTime(version.createdAt)}
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  className="btn ghost sm"
+                  disabled={!selectedSiteId || !canEdit(currentMembership?.role) || busyKey === `rollback-${version.id}`}
+                  onClick={() => void postJson(`/api/sites/${selectedSiteId}/rollback`, { versionId: version.id }, `rollback-${version.id}`)}
+                >
+                  {busyKey === `rollback-${version.id}` ? "回滚中…" : "回滚到此版本"}
+                </button>
+              </div>
+            ))}
+          </div>
+
+          <div className="card fixes">
+            <div className="head-row" style={{ marginBottom: 6 }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 9 }}>
+                <svg viewBox="0 0 24 24" fill="none" stroke="var(--teal)" strokeWidth={2} style={{ width: 18, height: 18 }}>
+                  <path d="M12 3l2.4 5.4L20 9l-4 4 1 6-5-3-5 3 1-6-4-4 5.6-.6z" />
+                </svg>
+                <h3 style={{ fontSize: 15 }}>AI 按知识库自动补全内容</h3>
+              </div>
+              <span className="badge manual">{detail?.version?.autofillCandidates.length ?? 0} 条</span>
+            </div>
+            <div className="sub" style={{ marginBottom: 8 }}>
+              新产品 / 认证 / 博客由 AI 依知识库生成草稿，每条要你确认或调整后上线。
+            </div>
+            {detail?.version?.autofillCandidates.map((candidate) => (
+              <div
+                key={candidate.id}
+                style={{ borderTop: "1px solid var(--line-2)", paddingTop: 12, marginTop: 12 }}
+              >
+                <div style={{ display: "flex", gap: 7, flexWrap: "wrap", marginBottom: 8 }}>
+                  <span className="badge line">{candidate.kind}</span>
+                  <span className={`st ${candidate.status === "applied" ? "published" : "pending"}`}>
+                    {candidate.status}
+                  </span>
+                </div>
+                <div style={{ fontWeight: 600, fontSize: 13.5 }}>{candidate.title}</div>
+                <div className="inq-body" style={{ marginTop: 8 }}>{candidate.summary}</div>
+                <textarea
+                  defaultValue={candidate.body}
+                  onBlur={(event) => {
+                    if (event.target.value !== candidate.body) {
+                      void postJson(
+                        `/api/sites/${selectedSiteId}/autofill`,
+                        {
+                          action: "update",
+                          candidateId: candidate.id,
+                          body: event.target.value,
+                        },
+                        `candidate-${candidate.id}`,
+                      );
+                    }
+                  }}
+                  style={{
+                    width: "100%",
+                    minHeight: 96,
+                    marginTop: 10,
+                    border: "1px solid var(--line)",
+                    borderRadius: 10,
+                    padding: "10px 13px",
+                    fontFamily: "inherit",
+                    fontSize: 13,
+                    lineHeight: 1.6,
+                    background: "var(--surface-2)",
+                  }}
+                />
+                <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginTop: 8 }}>
+                  {candidate.sourceCitations.map((citation) => (
+                    <span className="badge line" key={citation}>
+                      {citation}
+                    </span>
+                  ))}
+                </div>
+                <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 10 }}>
+                  <button
+                    type="button"
+                    className="btn primary sm"
+                    disabled={!canEdit(currentMembership?.role) || busyKey === `confirm-${candidate.id}`}
+                    onClick={() => void postJson(`/api/sites/${selectedSiteId}/autofill`, { action: "confirm", candidateId: candidate.id }, `confirm-${candidate.id}`)}
+                  >
+                    {busyKey === `confirm-${candidate.id}` ? "提交中…" : "确认上线(HITL)"}
+                  </button>
                 </div>
               </div>
-
-              {selectedSite ? (
-                <>
-                  <div className="mt-5 flex flex-wrap gap-2">
-                    <HitlAction
-                      tenantId={selectedTenantId}
-                      endpoint={`/api/sites/${selectedSite.id}/publish-request`}
-                      idleLabel="发起上线审批"
-                      busyLabel="提交中…"
-                      disabled={!canEdit(currentMembership?.role)}
-                      onError={(message) => setError(message || null)}
-                      onSuccess={() => refreshCurrent()}
-                    />
-                    <button
-                      type="button"
-                      className="rounded-full border border-[#ddd3bd] bg-white px-4 py-2 text-sm text-[#1f241f] disabled:opacity-50"
-                      disabled={!canEdit(currentMembership?.role) || busyKey === "offline"}
-                      onClick={() => void postJson(`/api/sites/${selectedSite.id}/status`, { status: "offline" }, "offline")}
-                    >
-                      立即下线
-                    </button>
-                    <button
-                      type="button"
-                      className="rounded-full border border-[#ddd3bd] bg-white px-4 py-2 text-sm text-[#1f241f] disabled:opacity-50"
-                      disabled={!canEdit(currentMembership?.role) || busyKey === "autofill-generate"}
-                      onClick={() => void postJson(`/api/sites/${selectedSite.id}/autofill`, { action: "generate" }, "autofill-generate")}
-                    >
-                      {busyKey === "autofill-generate" ? "生成中…" : "生成自动补全候选"}
-                    </button>
-                  </div>
-
-                  <div className="mt-5 grid gap-4 md:grid-cols-2">
-                    <div className="rounded-2xl border border-[#ece5d3] bg-[#fffdf8] p-4">
-                      <div className="text-xs uppercase tracking-[0.2em] text-[#6a6457]">状态</div>
-                      <div className="mt-2 text-lg font-semibold text-[#1f241f]">
-                        {selectedSite.status}
-                      </div>
-                    </div>
-                    <div className="rounded-2xl border border-[#ece5d3] bg-[#fffdf8] p-4">
-                      <div className="text-xs uppercase tracking-[0.2em] text-[#6a6457]">版本</div>
-                      <div className="mt-2 text-lg font-semibold text-[#1f241f]">
-                        v{selectedSite.versionNumber}
-                      </div>
-                    </div>
-                  </div>
-                </>
-              ) : null}
-            </section>
-
-            <section className="rounded-[28px] border border-[#ddd3bd] bg-white/90 p-5 shadow-[0_18px_70px_rgba(50,41,22,0.08)]">
-              <div className="flex items-center justify-between">
-                <h2 className="text-lg font-semibold text-[#1f241f]">审批队列</h2>
-                <span className="text-xs text-[#6a6457]">{relatedHitl.length} 条</span>
+            ))}
+            {!detail?.version?.autofillCandidates.length ? (
+              <div className="sub" style={{ padding: "10px 0" }}>
+                还没有自动补全候选，先点击「生成自动补全候选」。
               </div>
-              <div className="mt-4 space-y-3">
-                {relatedHitl.map((task) => (
-                  <div key={task.id} className="rounded-2xl border border-[#ece5d3] bg-[#fffdf8] p-4">
-                    <div className="flex items-center justify-between gap-4">
-                      <div>
-                        <div className="font-medium text-[#1f241f]">{formatTaskType(task.type)}</div>
-                        <div className="mt-1 text-xs text-[#6a6457]">
-                          {task.payload.mode === "autofill_candidate" ? "自动补全确认上线" : "站点上线"} · {formatTime(task.createdAt)}
-                        </div>
-                      </div>
-                      {canApprove(currentMembership?.role) ? (
-                        <HitlAction
-                          tenantId={selectedTenantId}
-                          endpoint={`/api/hitl/${task.id}/approve`}
-                          idleLabel="批准"
-                          busyLabel="审批中…"
-                          onError={(message) => setError(message || null)}
-                          onSuccess={() => refreshCurrent()}
-                        />
-                      ) : (
-                        <span className="rounded-full border border-[#ddd3bd] px-3 py-1 text-xs text-[#6a6457]">
-                          等待管理员
-                        </span>
-                      )}
-                    </div>
-                  </div>
-                ))}
-                {!relatedHitl.length ? (
-                  <div className="rounded-2xl border border-dashed border-[#ddd3bd] bg-[#faf6eb] px-4 py-5 text-sm text-[#6a6457]">
-                    当前站点没有待审批的发布任务。
-                  </div>
-                ) : null}
-              </div>
-            </section>
-
-            <section className="rounded-[28px] border border-[#ddd3bd] bg-white/90 p-5 shadow-[0_18px_70px_rgba(50,41,22,0.08)]">
-              <div className="flex items-center justify-between">
-                <h2 className="text-lg font-semibold text-[#1f241f]">版本回滚</h2>
-                <span className="text-xs text-[#6a6457]">{detail?.versionHistory.length ?? 0} 个版本</span>
-              </div>
-              <div className="mt-4 space-y-3">
-                {detail?.versionHistory.map((version) => (
-                  <div key={version.id} className="flex items-center justify-between gap-4 rounded-2xl border border-[#ece5d3] bg-[#fffdf8] p-4">
-                    <div>
-                      <div className="font-medium text-[#1f241f]">v{version.versionNumber}</div>
-                      <div className="mt-1 text-xs text-[#6a6457]">
-                        {version.note ?? "无备注"} · {formatTime(version.createdAt)}
-                      </div>
-                    </div>
-                    <button
-                      type="button"
-                      className="rounded-full border border-[#ddd3bd] bg-white px-4 py-2 text-sm text-[#1f241f] disabled:opacity-50"
-                      disabled={!selectedSiteId || !canEdit(currentMembership?.role) || busyKey === `rollback-${version.id}`}
-                      onClick={() => void postJson(`/api/sites/${selectedSiteId}/rollback`, { versionId: version.id }, `rollback-${version.id}`)}
-                    >
-                      {busyKey === `rollback-${version.id}` ? "回滚中…" : "回滚到此版本"}
-                    </button>
-                  </div>
-                ))}
-              </div>
-            </section>
-
-            <section className="rounded-[28px] border border-[#ddd3bd] bg-white/90 p-5 shadow-[0_18px_70px_rgba(50,41,22,0.08)]">
-              <div className="flex items-center justify-between">
-                <h2 className="text-lg font-semibold text-[#1f241f]">AI 自动补全候选</h2>
-                <span className="text-xs text-[#6a6457]">
-                  {detail?.version?.autofillCandidates.length ?? 0} 条
-                </span>
-              </div>
-              <div className="mt-4 space-y-4">
-                {detail?.version?.autofillCandidates.map((candidate) => (
-                  <div key={candidate.id} className="rounded-[24px] border border-[#ece5d3] bg-[#fffdf8] p-4">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <span className="rounded-full border border-[#dce7e1] bg-[#f1f8f3] px-3 py-1 text-xs text-[#2c6d56]">
-                        {candidate.kind}
-                      </span>
-                      <span className="rounded-full border border-[#ddd3bd] px-3 py-1 text-xs text-[#6a6457]">
-                        {candidate.status}
-                      </span>
-                    </div>
-                    <input
-                      className="mt-4 w-full rounded-2xl border border-[#ddd3bd] px-4 py-3 text-sm outline-none"
-                      value={candidate.title}
-                      readOnly
-                    />
-                    <div className="mt-3 rounded-2xl bg-[#faf6eb] px-4 py-3 text-sm leading-7 text-[#5d584c]">
-                      {candidate.summary}
-                    </div>
-                    <textarea
-                      className="mt-3 min-h-32 w-full rounded-2xl border border-[#ddd3bd] px-4 py-3 text-sm leading-7 outline-none"
-                      defaultValue={candidate.body}
-                      onBlur={(event) => {
-                        if (event.target.value !== candidate.body) {
-                          void postJson(
-                            `/api/sites/${selectedSiteId}/autofill`,
-                            {
-                              action: "update",
-                              candidateId: candidate.id,
-                              body: event.target.value,
-                            },
-                            `candidate-${candidate.id}`,
-                          );
-                        }
-                      }}
-                    />
-                    <div className="mt-3 flex flex-wrap gap-2">
-                      {candidate.sourceCitations.map((citation) => (
-                        <span key={citation} className="rounded-full border border-[#dce7e1] bg-[#f1f8f3] px-3 py-1 text-xs text-[#2c6d56]">
-                          {citation}
-                        </span>
-                      ))}
-                    </div>
-                    <div className="mt-4 flex flex-wrap gap-2">
-                      <button
-                        type="button"
-                        className="rounded-full bg-[#1f6a52] px-4 py-2 text-sm text-white disabled:bg-[#8cae9f]"
-                        disabled={!canEdit(currentMembership?.role) || busyKey === `confirm-${candidate.id}`}
-                        onClick={() => void postJson(`/api/sites/${selectedSiteId}/autofill`, { action: "confirm", candidateId: candidate.id }, `confirm-${candidate.id}`)}
-                      >
-                        {busyKey === `confirm-${candidate.id}` ? "提交中…" : "确认上线(HITL)"}
-                      </button>
-                    </div>
-                  </div>
-                ))}
-                {!detail?.version?.autofillCandidates.length ? (
-                  <div className="rounded-2xl border border-dashed border-[#ddd3bd] bg-[#faf6eb] px-4 py-5 text-sm text-[#6a6457]">
-                    还没有自动补全候选，先点击“生成自动补全候选”。
-                  </div>
-                ) : null}
-              </div>
-            </section>
+            ) : null}
           </div>
-        </section>
+        </div>
       </div>
-    </main>
+    </>
   );
 }

@@ -123,126 +123,135 @@ export function HitlClient() {
   }, [selectedTenantId]);
 
   return (
-    <main className="min-h-screen bg-[linear-gradient(180deg,#faf7ee_0%,#eee4d1_100%)] px-4 py-6 md:px-8">
-      <div className="mx-auto flex max-w-6xl flex-col gap-6">
-        <section className="rounded-[30px] border border-[#ddd3bd] bg-white/92 p-6 shadow-[0_22px_90px_rgba(50,41,22,0.08)]">
-          <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
-            <div>
-              <p className="font-mono text-xs uppercase tracking-[0.28em] text-[#2c6d56]">
-                T6.2 / HITL
-              </p>
-              <h1 className="mt-3 text-3xl font-semibold tracking-tight text-[#1f241f] md:text-4xl">
-                统一审批中心
-              </h1>
-              <p className="mt-2 text-sm leading-7 text-[#655f52]">
-                站点上线、内容发布、首响发送统一在这里处理，并跳转回各自模块继续操作。
-              </p>
-            </div>
-            <div className="flex flex-wrap items-center gap-3">
-              <Link
-                href="/"
-                className="rounded-full border border-[#ddd3bd] bg-white px-4 py-2 text-sm text-[#1f241f]"
-              >
-                返回工作台
-              </Link>
-              <select
-                className="rounded-full border border-[#ddd3bd] bg-white px-4 py-2 text-sm"
-                value={selectedTenantId}
-                onChange={(event) => {
-                  setLoading(true);
-                  setSelectedTenantId(event.target.value);
-                }}
-              >
-                {me?.memberships.map((membership) => (
-                  <option key={membership.tenantId} value={membership.tenantId}>
-                    {membership.tenantName}
-                  </option>
-                ))}
-              </select>
-            </div>
+    <>
+      <div className="head-row">
+        <div>
+          <div className="eyebrow">人工把关 · 审批中心</div>
+          <h2 className="sec" style={{ marginTop: 4 }}>
+            站点 · 内容 · 首响统一审批
+          </h2>
+          <div className="sub" style={{ marginTop: 4 }}>
+            所有对外动作都要你点头才生效，审批后可跳回各模块继续操作。
           </div>
-        </section>
-
-        {error ? (
-          <section className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
-            {error}
-          </section>
-        ) : null}
-
-        <section className="grid gap-4 md:grid-cols-3">
-          <div className="rounded-[26px] border border-[#ddd3bd] bg-white/90 p-5">
-            <div className="text-xs uppercase tracking-[0.22em] text-[#7b745f]">站点待批</div>
-            <div className="mt-4 text-4xl font-semibold text-[#1f241f]">
-              {tasks.filter((task) => task.type === "site_publish").length}
-            </div>
-          </div>
-          <div className="rounded-[26px] border border-[#ddd3bd] bg-white/90 p-5">
-            <div className="text-xs uppercase tracking-[0.22em] text-[#7b745f]">内容待批</div>
-            <div className="mt-4 text-4xl font-semibold text-[#1f241f]">
-              {tasks.filter((task) => task.type === "content_publish").length}
-            </div>
-          </div>
-          <div className="rounded-[26px] border border-[#ddd3bd] bg-white/90 p-5">
-            <div className="text-xs uppercase tracking-[0.22em] text-[#7b745f]">首响待批</div>
-            <div className="mt-4 text-4xl font-semibold text-[#1f241f]">
-              {tasks.filter((task) => task.type === "reply_send").length}
-            </div>
-          </div>
-        </section>
-
-        <section className="rounded-[30px] border border-[#ddd3bd] bg-white/90 p-5">
-          <div className="mb-4 flex items-center justify-between">
-            <h2 className="text-lg font-semibold text-[#1f241f]">待处理任务</h2>
-            <span className="text-xs text-[#6a6457]">{loading ? "加载中…" : `${tasks.length} 条`}</span>
-          </div>
-          <div className="space-y-3">
-            {tasks.map((task) => (
-              <div key={task.id} className="rounded-[24px] border border-[#ece5d3] bg-[#fffdf8] p-4">
-                <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-                  <div>
-                    <Link href={resolveTaskHref(task)} className="text-lg font-semibold text-[#1f241f]">
-                      {formatTaskType(task.type)}
-                    </Link>
-                    <div className="mt-2 text-sm leading-6 text-[#655f52]">
-                      {formatTaskDetail(task)} · {task.entityType} / {task.entityId}
-                    </div>
-                    <div className="mt-2 text-xs text-[#7b745f]">
-                      创建时间：{formatTime(task.createdAt)}
-                    </div>
-                  </div>
-                  <div className="flex flex-wrap gap-3">
-                    <Link
-                      href={resolveTaskHref(task)}
-                      className="rounded-full border border-[#ddd3bd] bg-white px-4 py-2 text-sm text-[#1f241f]"
-                    >
-                      查看上下文
-                    </Link>
-                    {canApproveTask(currentMembership?.role, task.type) ? (
-                      <HitlAction
-                        tenantId={selectedTenantId}
-                        endpoint={`/api/hitl/${task.id}/approve`}
-                        idleLabel="批准"
-                        busyLabel="审批中…"
-                        onError={(message) => setError(message || null)}
-                        onSuccess={() => refreshTasks()}
-                      />
-                    ) : (
-                      <span className="rounded-full border border-[#ddd3bd] px-4 py-2 text-sm text-[#6a6457]">
-                        当前角色无权审批
-                      </span>
-                    )}
-                  </div>
-                </div>
-              </div>
+        </div>
+        {me && me.memberships.length > 0 ? (
+          <select
+            className="btn ghost sm"
+            value={selectedTenantId}
+            onChange={(event) => {
+              setLoading(true);
+              setSelectedTenantId(event.target.value);
+            }}
+          >
+            {me.memberships.map((membership) => (
+              <option key={membership.tenantId} value={membership.tenantId}>
+                {membership.tenantName}
+              </option>
             ))}
-            {!tasks.length ? (
-              <div className="rounded-2xl border border-dashed border-[#ddd3bd] bg-[#faf6eb] px-4 py-5 text-sm text-[#6a6457]">
-                当前没有待处理审批。
-              </div>
-            ) : null}
-          </div>
-        </section>
+          </select>
+        ) : null}
       </div>
-    </main>
+
+      {error ? (
+        <div
+          className="card"
+          style={{
+            padding: "12px 16px",
+            marginBottom: 18,
+            borderColor: "var(--warn-soft)",
+            background: "var(--warn-soft)",
+            color: "var(--warn)",
+            fontSize: 13,
+          }}
+        >
+          {error}
+        </div>
+      ) : null}
+
+      <div className="stat-strip" style={{ gridTemplateColumns: "repeat(3, 1fr)" }}>
+        <div className="stat">
+          <div className="v">{tasks.filter((task) => task.type === "site_publish").length}</div>
+          <div className="l">站点待批</div>
+        </div>
+        <div className="stat">
+          <div className="v">{tasks.filter((task) => task.type === "content_publish").length}</div>
+          <div className="l">内容待批</div>
+        </div>
+        <div className="stat">
+          <div className="v">{tasks.filter((task) => task.type === "reply_send").length}</div>
+          <div className="l">首响待批</div>
+        </div>
+      </div>
+
+      <div className="head-row" style={{ marginBottom: 10 }}>
+        <h3 style={{ fontSize: 16 }}>待处理任务</h3>
+        <span className="badge manual">{loading ? "加载中…" : `${tasks.length} 待处理`}</span>
+      </div>
+      <div className="card" style={{ padding: "8px 20px" }}>
+        {tasks.map((task) => (
+          <div className="hitl-item" key={task.id}>
+            <div className="ic local">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
+                <path d="M4 4h16v12H5.2L4 18z" />
+              </svg>
+            </div>
+            <div className="grow">
+              <div className="t">{formatTaskType(task.type)}</div>
+              <div className="m">
+                {formatTaskDetail(task)} · {formatTime(task.createdAt)}
+              </div>
+            </div>
+            <Link className="btn ghost sm" href={resolveTaskHref(task)}>
+              查看上下文
+            </Link>
+            {canApproveTask(currentMembership?.role, task.type) ? (
+              <HitlAction
+                tenantId={selectedTenantId}
+                endpoint={`/api/hitl/${task.id}/approve`}
+                idleLabel="批准"
+                busyLabel="审批中…"
+                onError={(message) => setError(message || null)}
+                onSuccess={() => refreshTasks()}
+              />
+            ) : (
+              <span className="badge line">无权审批</span>
+            )}
+          </div>
+        ))}
+        {!tasks.length ? (
+          <div className="empty" style={{ padding: "32px 12px" }}>
+            <div className="t">当前没有待处理审批</div>
+            <div className="s">智能体产出的对外动作会先进入这里等待你确认。</div>
+          </div>
+        ) : null}
+      </div>
+
+      <div
+        className="card"
+        style={{
+          padding: "14px 18px",
+          marginTop: 14,
+          display: "flex",
+          alignItems: "center",
+          gap: 12,
+          background: "var(--local-soft)",
+          borderColor: "#cfccf0",
+        }}
+      >
+        <svg
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="var(--local-2)"
+          strokeWidth={2}
+          style={{ width: 18, height: 18, flex: "none" }}
+        >
+          <path d="M12 2 4 6v6c0 5 3.5 8 8 10 4.5-2 8-5 8-10V6z" />
+        </svg>
+        <div style={{ flex: 1, fontSize: 12.5, color: "var(--local-2)" }}>
+          客户姓名、电话、询盘正文属隐私数据，<b>只在本地 Qwen 处理，不发往 OpenAI / Google</b>
+          。本地引擎不可用时任务会排队等待恢复，绝不切第三方。
+        </div>
+      </div>
+    </>
   );
 }

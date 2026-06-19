@@ -130,109 +130,105 @@ export function DesignClient() {
   const pendingCount = items.filter((item) => item.publishRequestPending).length;
 
   return (
-    <main className="min-h-screen bg-[linear-gradient(180deg,#fbf8f0_0%,#efe5d2_100%)] px-4 py-6 md:px-8">
-      <div className="mx-auto flex max-w-7xl flex-col gap-6">
-        <section className="rounded-[30px] border border-[#ddd3bd] bg-white/92 p-6 shadow-[0_22px_90px_rgba(50,41,22,0.08)]">
-          <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
-            <div>
-              <p className="font-mono text-xs uppercase tracking-[0.28em] text-[#2c6d56]">
-                T6.1 / Design
-              </p>
-              <h1 className="mt-3 text-3xl font-semibold tracking-tight text-[#1f241f] md:text-4xl">
-                内容发布队列
-              </h1>
-              <p className="mt-2 text-sm leading-7 text-[#655f52]">
-                内容不再直接改成已发，先发起审批请求，再由 HITL 统一确认。
-              </p>
-            </div>
-            <div className="flex flex-wrap items-center gap-3">
-              <Link
-                href="/"
-                className="rounded-full border border-[#ddd3bd] bg-white px-4 py-2 text-sm text-[#1f241f]"
-              >
-                返回工作台
-              </Link>
-              <select
-                className="rounded-full border border-[#ddd3bd] bg-white px-4 py-2 text-sm"
-                value={selectedTenantId}
-                onChange={(event) => {
-                  setLoading(true);
-                  setSelectedTenantId(event.target.value);
-                }}
-              >
-                {me?.memberships.map((membership) => (
-                  <option key={membership.tenantId} value={membership.tenantId}>
-                    {membership.tenantName}
-                  </option>
-                ))}
-              </select>
-            </div>
+    <>
+      <div className="head-row">
+        <div>
+          <div className="eyebrow">AI 设计 / 内容包</div>
+          <h2 className="sec" style={{ marginTop: 4 }}>
+            一个选题 · 多平台达标成品
+          </h2>
+          <div className="sub" style={{ marginTop: 4 }}>
+            内容不再直接改成已发，先发起审批请求，再由 HITL 统一确认。
           </div>
-        </section>
-
-        {error ? (
-          <section className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
-            {error}
-          </section>
+        </div>
+        {me && me.memberships.length > 0 ? (
+          <select
+            className="btn ghost sm"
+            value={selectedTenantId}
+            onChange={(event) => {
+              setLoading(true);
+              setSelectedTenantId(event.target.value);
+            }}
+          >
+            {me.memberships.map((membership) => (
+              <option key={membership.tenantId} value={membership.tenantId}>
+                {membership.tenantName}
+              </option>
+            ))}
+          </select>
         ) : null}
+      </div>
 
-        <section className="grid gap-4 md:grid-cols-3">
-          <div className="rounded-[26px] border border-[#ddd3bd] bg-white/90 p-5">
-            <div className="text-xs uppercase tracking-[0.22em] text-[#7b745f]">全部内容</div>
-            <div className="mt-4 text-4xl font-semibold text-[#1f241f]">{items.length}</div>
-          </div>
-          <div className="rounded-[26px] border border-[#ddd3bd] bg-white/90 p-5">
-            <div className="text-xs uppercase tracking-[0.22em] text-[#7b745f]">审批中</div>
-            <div className="mt-4 text-4xl font-semibold text-[#1f241f]">{pendingCount}</div>
-          </div>
-          <div className="rounded-[26px] border border-[#ddd3bd] bg-white/90 p-5">
-            <div className="text-xs uppercase tracking-[0.22em] text-[#7b745f]">待发布</div>
-            <div className="mt-4 text-4xl font-semibold text-[#1f241f]">
-              {items.filter((item) => item.publishStatus === "pending").length}
+      {error ? (
+        <div
+          className="card"
+          style={{
+            padding: "12px 16px",
+            marginBottom: 18,
+            borderColor: "var(--warn-soft)",
+            background: "var(--warn-soft)",
+            color: "var(--warn)",
+            fontSize: 13,
+          }}
+        >
+          {error}
+        </div>
+      ) : null}
+
+      <div className="rules">
+        <div className="ric">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
+            <path d="M12 3v3M12 18v3M3 12h3M18 12h3" />
+            <circle cx="12" cy="12" r="4" />
+          </svg>
+        </div>
+        <div>
+          <div className="rt">已按各平台最新规则适配 · 发布前需 HITL 审批</div>
+          <div className="rs">尺寸 / 时长 / 文案 / 标签逐项对齐；视频平台出脚本 + 分镜 + 封面（成片→V1.5）</div>
+        </div>
+        <span className="upd">{loading ? "加载中…" : `${items.length} 条`}</span>
+      </div>
+
+      <div className="stat-strip" style={{ gridTemplateColumns: "repeat(3, 1fr)" }}>
+        <div className="stat">
+          <div className="v">{items.length}</div>
+          <div className="l">全部内容</div>
+        </div>
+        <div className="stat">
+          <div className="v">{pendingCount}</div>
+          <div className="l">审批中</div>
+        </div>
+        <div className="stat">
+          <div className="v">{items.filter((item) => item.publishStatus === "pending").length}</div>
+          <div className="l">待发布</div>
+        </div>
+      </div>
+
+      <div className="pack-grid">
+        {items.map((item) => (
+          <div className="pk" key={item.id}>
+            <div className="pk-top" style={{ background: platformGradient(item.platform) }}>
+              <span className="ratio">{item.mediaType}</span>
+              <span className="plat">{item.platform.toUpperCase()}</span>
+              <span className="kind">{item.title}</span>
             </div>
-          </div>
-        </section>
-
-        <section className="rounded-[30px] border border-[#ddd3bd] bg-white/90 p-5">
-          <div className="mb-4 flex items-center justify-between">
-            <h2 className="text-lg font-semibold text-[#1f241f]">内容卡片</h2>
-            <span className="text-xs text-[#6a6457]">{loading ? "加载中…" : `${items.length} 条`}</span>
-          </div>
-          <div className="grid gap-4 lg:grid-cols-2">
-            {items.map((item) => (
-              <article key={item.id} className="rounded-[24px] border border-[#ece5d3] bg-[#fffdf8] p-4">
-                <div className="flex items-start justify-between gap-3">
-                  <div>
-                    <div className="text-xs uppercase tracking-[0.22em] text-[#7b745f]">
-                      {item.platform.toUpperCase()} · {item.mediaType}
-                    </div>
-                    <h2 className="mt-2 text-xl font-semibold text-[#1f241f]">{item.title}</h2>
-                    <div className="mt-2 text-sm text-[#655f52]">
-                      {item.contentPackTitle} · 状态 {item.publishStatus}
-                    </div>
-                  </div>
-                  {item.publishRequestPending ? (
-                    <span className="rounded-full bg-[#f1f8f3] px-3 py-1 text-xs text-[#2c6d56]">
-                      审批中
-                    </span>
-                  ) : null}
-                </div>
-                <div className="mt-4 flex flex-wrap gap-3">
-                  <Link
-                    href={item.editUrl}
-                    className="rounded-full border border-[#ddd3bd] bg-white px-4 py-2 text-sm text-[#1f241f]"
-                  >
-                    打开内容包
-                  </Link>
+            <div className="pk-body">
+              <div className="pk-spec">{item.contentPackTitle}</div>
+              <div style={{ marginBottom: 8 }}>
+                <span className={`st ${item.publishStatus}`}>{item.publishStatus}</span>
+                {item.publishRequestPending ? (
+                  <span className="badge local" style={{ marginLeft: 6 }}>审批中</span>
+                ) : null}
+              </div>
+              <div className="pk-link" style={{ borderTop: "none", paddingTop: 0, marginTop: 0 }}>
+                <Link className="link" href={item.editUrl}>
+                  打开内容包
+                </Link>
+                <span style={{ marginLeft: "auto" }}>
                   {item.publishStatus === "published" ? (
-                    <span className="rounded-full border border-[#ddd3bd] px-4 py-2 text-sm text-[#6a6457]">
-                      已发布
-                    </span>
+                    <span className="badge good">已发布</span>
                   ) : item.publishRequestPending ? (
-                    <Link
-                      href="/hitl"
-                      className="rounded-full border border-[#ddd3bd] bg-white px-4 py-2 text-sm text-[#1f241f]"
-                    >
+                    <Link className="btn ghost sm" href="/hitl">
                       去审批中心
                     </Link>
                   ) : (
@@ -246,17 +242,41 @@ export function DesignClient() {
                       onSuccess={() => refreshQueue()}
                     />
                   )}
-                </div>
-              </article>
-            ))}
-            {!items.length ? (
-              <div className="rounded-2xl border border-dashed border-[#ddd3bd] bg-[#faf6eb] px-4 py-5 text-sm text-[#6a6457]">
-                当前没有内容数据。
+                </span>
               </div>
-            ) : null}
+            </div>
           </div>
-        </section>
+        ))}
+        {!items.length ? (
+          <div className="card empty" style={{ gridColumn: "1 / -1" }}>
+            <div className="t">{loading ? "加载中…" : "当前没有内容数据"}</div>
+            <div className="s">在「AI 设计」里对话生成第一个内容包。</div>
+          </div>
+        ) : null}
       </div>
-    </main>
+    </>
   );
+}
+
+function platformGradient(platform: string) {
+  const key = platform.toLowerCase();
+  const map: Record<string, string> = {
+    linkedin: "linear-gradient(140deg,#0A66C2,#08498C)",
+    facebook: "linear-gradient(140deg,#1877F2,#0F5BD1)",
+    instagram: "linear-gradient(140deg,#C13584,#F77737)",
+    reels: "linear-gradient(140deg,#5851DB,#E1306C)",
+    tiktok: "linear-gradient(140deg,#111,#00C2B8)",
+    youtube: "linear-gradient(140deg,#FF0000,#B80000)",
+    shorts: "linear-gradient(140deg,#FF4D4D,#CC0000)",
+    vk: "linear-gradient(140deg,#0077FF,#0048B3)",
+    rutube: "linear-gradient(140deg,#23173F,#000)",
+  };
+
+  for (const name of Object.keys(map)) {
+    if (key.includes(name)) {
+      return map[name];
+    }
+  }
+
+  return "linear-gradient(140deg,#0C5C56,#072F2B)";
 }

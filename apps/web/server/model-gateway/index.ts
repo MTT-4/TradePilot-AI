@@ -78,8 +78,8 @@ type DataClassifierResult = {
 
 const EMAIL_PATTERN =
   /\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b/i;
-const PHONE_PATTERN =
-  /(?:\+?\d[\d\s().-]{6,}\d)/;
+const PHONE_CANDIDATE_PATTERN =
+  /(?:\+?\d[\d\s().-]{6,}\d)/g;
 const PRIVACY_KEYWORDS = [
   "inquiry",
   "customer inquiry",
@@ -508,7 +508,7 @@ function isLikelySensitiveText(text: string) {
     return false;
   }
 
-  if (EMAIL_PATTERN.test(normalized) || PHONE_PATTERN.test(normalized)) {
+  if (EMAIL_PATTERN.test(normalized) || containsPhoneNumber(normalized)) {
     return true;
   }
 
@@ -517,6 +517,24 @@ function isLikelySensitiveText(text: string) {
   return PRIVACY_KEYWORDS.some((keyword) =>
     lower.includes(keyword.toLowerCase()),
   );
+}
+
+function containsPhoneNumber(text: string) {
+  const candidates = text.match(PHONE_CANDIDATE_PATTERN) ?? [];
+
+  return candidates.some((candidate) => {
+    const digitsOnly = candidate.replace(/\D/g, "");
+
+    if (digitsOnly.length < 7 || digitsOnly.length > 15) {
+      return false;
+    }
+
+    if (/[+\s().-]/.test(candidate)) {
+      return true;
+    }
+
+    return /\b(phone|tel|mobile|whatsapp|call|电话|手机)\b/i.test(text);
+  });
 }
 
 async function classifySensitivity(params: {

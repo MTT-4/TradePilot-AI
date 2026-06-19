@@ -12,6 +12,7 @@ import {
   runEmbedDocumentJob,
   runParseDocumentJob,
 } from "@/server/kb/service";
+import { runGenerateContentPackJob } from "@/server/content-packs/service";
 import { runGenerateSiteJob } from "@/server/sites/service";
 
 type JobProgressReporter = {
@@ -108,6 +109,30 @@ async function queueProcessor(bullJob: Job<QueuePayload>) {
               documentId: String(bullJob.data.input.documentId ?? ""),
               reportProgress: reporter.reportProgress,
             })
+          : bullJob.data.type === JobType.GENERATE_CONTENT_PACK
+            ? await runGenerateContentPackJob({
+                tenantId: bullJob.data.tenantId,
+                requestedByUserId: bullJob.data.requestedByUserId,
+                contentPackId: String(bullJob.data.input.contentPackId ?? ""),
+                request: bullJob.data.input.request as {
+                  campaignId?: string;
+                  topic: string;
+                  market?: string;
+                  locales: Array<"en" | "ar" | "ru" | "fr" | "de" | "pt">;
+                  platforms?: Array<
+                    | "linkedin"
+                    | "facebook"
+                    | "instagram"
+                    | "reels"
+                    | "tiktok"
+                    | "youtube"
+                    | "shorts"
+                    | "vk_clips"
+                    | "rutube"
+                  >;
+                },
+                reportProgress: reporter.reportProgress,
+              })
           : bullJob.data.type === JobType.GENERATE_SITE
             ? await runGenerateSiteJob({
                 tenantId: bullJob.data.tenantId,

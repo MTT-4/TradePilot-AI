@@ -54,11 +54,11 @@ describe("T0.7 jobs", () => {
     const enqueueResult = await enqueueTenantJob({
       tenantContext: tenantContextA,
       requestedByUserId: tenantContextA.userId,
-      type: "GENERATE_CONTENT_PACK",
+      type: "GENERATE_REPLY",
       idempotencyKey: `t0-7-progress-${Date.now()}`,
       input: {
         simulateMs: 220,
-        topic: "middle-east-air-compressor",
+        inquiryId: "demo-inquiry",
       },
     });
 
@@ -92,7 +92,7 @@ describe("T0.7 jobs", () => {
     expect(finalJob.status).toBe("SUCCEEDED");
     expect(finalJob.progress).toBe(100);
     expect(finalJob.output).toMatchObject({
-      handledType: "generate_content_pack",
+      handledType: "generate_reply",
     });
   });
 

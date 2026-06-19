@@ -426,4 +426,27 @@ describe("T0.5 model gateway privacy routing", () => {
 
     expect(classifierInvocation.route).toBe(ModelRoute.LOCAL_QWEN);
   });
+
+  it("R2.6 keeps public prompts with long numeric topics on OpenAI", async () => {
+    const { fetchMock, counters } = createGatewayFetchMock();
+    const gateway = createModelGateway({
+      fetchImpl: fetchMock,
+    });
+
+    const result = await gateway.invoke({
+      tenantContext: tenantContextA,
+      userId: tenantContextA.userId,
+      taskType: ModelTaskType.GENERATE,
+      prompt:
+        "Draft a public launch post for Industrial mixer export push 1781800463498 in the Middle East market.",
+      sensitivity: KnowledgeSensitivity.PUBLIC,
+      requestSummary: "r2.6 public numeric topic",
+    });
+
+    expect(result.route).toBe(ModelRoute.OPENAI);
+    expect(result.containsPii).toBe(false);
+    expect(counters.openai).toBe(1);
+    expect(counters.localQwen).toBe(0);
+    expect(counters.google).toBe(0);
+  });
 });

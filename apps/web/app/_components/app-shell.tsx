@@ -92,6 +92,21 @@ const NAV_GROUPS: NavGroup[] = [
       },
     ],
   },
+  {
+    label: "治理",
+    items: [
+      {
+        href: "/settings",
+        label: "合规 / 权限",
+        icon: icon(
+          <>
+            <path d="M12 2 4 6v6c0 5 3.5 8 8 10 4.5-2 8-5 8-10V6z" />
+            <path d="M9.5 12.5 11 14l4-4" />
+          </>,
+        ),
+      },
+    ],
+  },
 ];
 
 const TITLE_BY_PREFIX: Array<[string, string]> = [
@@ -101,6 +116,7 @@ const TITLE_BY_PREFIX: Array<[string, string]> = [
   ["/content-packs", "内容包"],
   ["/crm", "CRM 管道"],
   ["/hitl", "人工把关 · 审批中心"],
+  ["/settings", "合规与权限"],
 ];
 
 function resolveTitle(pathname: string) {

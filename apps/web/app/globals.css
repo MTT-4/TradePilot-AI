@@ -342,7 +342,21 @@ a {
   font-family: inherit;
   background: var(--surface-2);
 }
+.field select {
+  width: 100%;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 11px 13px;
+  font-size: 14px;
+  font-family: inherit;
+  background: var(--surface-2);
+}
 .field input:focus {
+  outline: none;
+  border-color: var(--teal);
+  background: #fff;
+}
+.field select:focus {
   outline: none;
   border-color: var(--teal);
   background: #fff;

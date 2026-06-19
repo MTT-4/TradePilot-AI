@@ -75,6 +75,10 @@ export default async function PublicSiteLocalePage({
 }) {
   const resolvedParams = await params;
   const data = await loadPageData(resolvedParams);
+  const sections = data.locale.translatedContent.sections ?? [];
+  const faqItems = data.locale.translatedContent.faq ?? [];
+  const ctaLabel = data.locale.translatedContent.ctaLabel ?? "Contact us";
+  const subheadline = data.locale.translatedContent.subheadline ?? "";
 
   return (
     <main
@@ -115,7 +119,7 @@ export default async function PublicSiteLocalePage({
                   {data.locale.translatedContent.headline}
                 </h1>
                 <p className="mt-4 max-w-3xl text-lg leading-8 text-[#55554d]">
-                  {data.locale.translatedContent.subheadline}
+                  {subheadline}
                 </p>
               </div>
               <div className="flex flex-wrap gap-3">
@@ -123,7 +127,7 @@ export default async function PublicSiteLocalePage({
                   href="#inquiry-form"
                   className="rounded-full bg-[#1f6a52] px-5 py-3 text-sm font-medium text-white"
                 >
-                  {data.locale.translatedContent.ctaLabel}
+                  {ctaLabel}
                 </a>
                 <span className="rounded-full border border-[#ddd3bd] bg-white px-4 py-3 text-sm text-[#5a564a]">
                   {data.locale.urlPath}
@@ -163,7 +167,7 @@ export default async function PublicSiteLocalePage({
       </section>
 
       <section className="mx-auto grid w-full max-w-6xl gap-5 px-4 py-10 md:px-8 lg:grid-cols-2">
-        {data.locale.translatedContent.sections.map((section) => (
+        {sections.map((section) => (
           <article
             key={section.id}
             className="rounded-[28px] border border-[#e4dcc8] bg-white p-6 shadow-[0_18px_70px_rgba(54,45,23,0.06)]"
@@ -186,7 +190,7 @@ export default async function PublicSiteLocalePage({
         ))}
       </section>
 
-      {data.locale.translatedContent.faq.length ? (
+      {faqItems.length ? (
         <section className="mx-auto w-full max-w-6xl px-4 pb-10 md:px-8">
           <div className="rounded-[28px] border border-[#e4dcc8] bg-white p-6 shadow-[0_18px_70px_rgba(54,45,23,0.06)]">
             <div className="mb-5 flex items-center justify-between gap-4">
@@ -196,7 +200,7 @@ export default async function PublicSiteLocalePage({
               </span>
             </div>
             <div className="space-y-4">
-              {data.locale.translatedContent.faq.map((item) => (
+              {faqItems.map((item) => (
                 <article key={item.question} className="rounded-2xl bg-[#faf6eb] p-5">
                   <h3 className="text-lg font-medium">{item.question}</h3>
                   <p className="mt-2 text-sm leading-7 text-[#5f594c]">{item.answer}</p>
@@ -214,7 +218,7 @@ export default async function PublicSiteLocalePage({
             className="rounded-[28px] border border-[#e4dcc8] bg-white p-6 shadow-[0_18px_70px_rgba(54,45,23,0.06)]"
           >
             <h2 className="text-2xl font-semibold tracking-tight">
-              {data.locale.translatedContent.ctaLabel}
+              {ctaLabel}
             </h2>
             <p className="mt-2 text-sm leading-7 text-[#666154]">
               Public preview only. Lead capture wiring will be connected in the CRM stage.
@@ -241,7 +245,7 @@ export default async function PublicSiteLocalePage({
               type="button"
               className="mt-4 rounded-full bg-[#1f6a52] px-5 py-3 text-sm font-medium text-white"
             >
-              {data.locale.translatedContent.ctaLabel}
+              {ctaLabel}
             </button>
           </form>
 

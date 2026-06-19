@@ -8,6 +8,7 @@ import {
 import { ZodError, z } from "zod";
 import { ApiError } from "@/server/api/errors";
 import { getPrismaClient } from "@/server/db/prisma";
+import { refreshLeadScore } from "@/server/leads/scoring";
 import { resolveTrackingAttributionBySlug } from "@/server/tracking/service";
 
 const apiLocaleSchema = z.enum(["en", "ar", "ru", "fr", "de", "pt", "zh"]);
@@ -284,6 +285,11 @@ export async function submitPublicLeadForm(params: {
       inquiryId: inquiry.id,
       reused: false,
     };
+  });
+
+  await refreshLeadScore({
+    tenantId: tenant.id,
+    leadId: result.leadId,
   });
 
   return result;

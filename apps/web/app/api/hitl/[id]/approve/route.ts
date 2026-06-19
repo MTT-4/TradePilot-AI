@@ -15,7 +15,7 @@ export const POST = auth(async (request, routeContext) => {
     const { context } = await requireTenantAccess(
       request.headers,
       userId,
-      MembershipRole.ADMIN,
+      MembershipRole.SALES,
     );
     const params = await routeContext.params;
 

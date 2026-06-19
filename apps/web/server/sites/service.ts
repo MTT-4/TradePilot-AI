@@ -12,10 +12,12 @@ import {
 import { z } from "zod";
 import { getEnv } from "@/lib/env";
 import { ApiError } from "@/server/api/errors";
+import { hasMinimumRole } from "@/server/auth/rbac";
 import type { TenantContext } from "@/server/db/tenant-context";
 import { getPrismaClient } from "@/server/db/prisma";
 import { getTenantPrisma } from "@/server/db/tenant-prisma";
 import { enqueueTenantJob } from "@/server/jobs/service";
+import { approveReplySendTask } from "@/server/replies/service";
 
 const apiLocaleSchema = z.enum(["en", "ar", "ru", "fr", "de", "pt"]);
 
@@ -2366,6 +2368,54 @@ export async function approveHitlTask(params: {
 
   if (task.status !== HitlStatus.PENDING) {
     throw new ApiError(409, "CONFLICT", "HITL task has already been resolved.");
+  }
+
+  if (task.type === HitlTaskType.REPLY_SEND) {
+    const replyPayload = (task.payload ?? {}) as {
+      replyId?: string;
+    };
+
+    if (!replyPayload.replyId) {
+      throw new ApiError(409, "CONFLICT", "Unsupported HITL task payload.");
+    }
+
+    await approveReplySendTask({
+      tenantContext: params.tenantContext,
+      hitlTaskId: params.hitlTaskId,
+      replyId: replyPayload.replyId,
+      approvedByUserId: params.approvedByUserId,
+    });
+
+    await tenantPrisma.hitlTask.update({
+      where: {
+        id: params.hitlTaskId,
+      },
+      data: {
+        status: HitlStatus.APPROVED,
+        approvedByUserId: params.approvedByUserId,
+        resolvedAt: new Date(),
+      },
+    });
+
+    await createAuditLog({
+      tenantId: params.tenantContext.tenantId,
+      actorUserId: params.approvedByUserId,
+      action: "hitl_task_approved",
+      entityType: task.entityType,
+      entityId: task.entityId,
+      metadata: {
+        hitlTaskId: task.id,
+      },
+    });
+
+    return {
+      hitlTaskId: params.hitlTaskId,
+      status: "approved",
+    };
+  }
+
+  if (!hasMinimumRole(params.tenantContext.role, "ADMIN")) {
+    throw new ApiError(403, "FORBIDDEN", "This HITL task requires admin role or higher.");
   }
 
   const payload = (task.payload ?? {}) as {

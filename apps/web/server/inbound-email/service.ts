@@ -9,6 +9,7 @@ import {
 import { ZodError, z } from "zod";
 import { ApiError } from "@/server/api/errors";
 import { getPrismaClient } from "@/server/db/prisma";
+import { refreshLeadScore } from "@/server/leads/scoring";
 
 const inboundEmailAttachmentSchema = z.object({
   name: z.string().trim().min(1).max(240),
@@ -324,6 +325,11 @@ export async function ingestInboundEmail(params: {
       status: inboundEmail.status.toLowerCase(),
       reused: false,
     };
+  });
+
+  await refreshLeadScore({
+    tenantId: tenant.id,
+    leadId: String(result.leadId),
   });
 
   return result;

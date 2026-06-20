@@ -2,8 +2,8 @@ import { MembershipRole } from "@prisma/client";
 import { auth } from "@/auth";
 import { routeErrorToResponse } from "@/server/api/errors";
 import { requireTenantAccess } from "@/server/auth/access";
-import { getEnv } from "@/lib/env";
 import { listNotifications } from "@/server/notifications/service";
+import { getResolvedModelPolicy } from "@/server/settings/service";
 
 export const GET = auth(async (request) => {
   try {
@@ -27,9 +27,8 @@ export const GET = auth(async (request) => {
       userId,
       MembershipRole.ADMIN,
     );
-    const env = getEnv();
 
-    const [brandKit, sitePortfolio, notifications] = await Promise.all([
+    const [brandKit, sitePortfolio, notifications, modelPolicy] = await Promise.all([
       tenantPrisma.brandKit.findFirst({
         orderBy: {
           updatedAt: "desc",
@@ -59,6 +58,7 @@ export const GET = auth(async (request) => {
       listNotifications({
         tenantContext: context,
       }),
+      getResolvedModelPolicy(context),
     ]);
 
     return Response.json({
@@ -90,15 +90,7 @@ export const GET = auth(async (request) => {
         pendingApprovals: notifications.items.filter((item) => item.type === "hitl_pending")
           .length,
       },
-      modelPolicy: {
-        privateTextRoute: "local_qwen",
-        embeddingRoute: "local_bge",
-        translationRoute: "google_translate",
-        externalTextRoute: "openai_when_non_pii",
-        localQwenModel: env.LOCAL_QWEN_MODEL,
-        localBgeModel: env.LOCAL_BGE_MODEL,
-        openaiModel: env.OPENAI_MODEL,
-      },
+      modelPolicy,
     });
   } catch (error) {
     return routeErrorToResponse(error);

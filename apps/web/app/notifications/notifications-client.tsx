@@ -27,7 +27,7 @@ type NotificationsResponse = {
 
 async function fetchNotifications(
   tenantId: string,
-  status: "all" | "unread" | "read",
+  status: "all" | "unread" | "read" | "archived",
 ) {
   const query = status === "all" ? "" : `?status=${status}`;
   const response = await fetch(`/api/notifications${query}`, {
@@ -77,11 +77,66 @@ function badgeClass(item: NotificationItem) {
 export function NotificationsClient() {
   const [me, setMe] = useState<MeResponse | null>(null);
   const [selectedTenantId, setSelectedTenantId] = useState("");
-  const [status, setStatus] = useState<"all" | "unread" | "read">("all");
+  const [status, setStatus] = useState<"all" | "unread" | "read" | "archived">("all");
   const [items, setItems] = useState<NotificationItem[]>([]);
   const [unreadCount, setUnreadCount] = useState(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [actioningId, setActioningId] = useState<string | null>(null);
+
+  async function refreshNotifications(nextStatus = status, tenantId = selectedTenantId) {
+    if (!tenantId) {
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const payload = await fetchNotifications(tenantId, nextStatus);
+      setError(null);
+      setItems(payload.items);
+      setUnreadCount(payload.unreadCount);
+    } catch (loadError) {
+      setError(loadError instanceof Error ? loadError.message : "加载通知失败。");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function handleNotificationAction(
+    notificationId: string,
+    action: "read" | "archive",
+  ) {
+    if (!selectedTenantId) {
+      return;
+    }
+
+    setActioningId(notificationId);
+    setError(null);
+
+    try {
+      const response = await fetch(`/api/notifications/${notificationId}`, {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+          "X-Tenant-Id": selectedTenantId,
+        },
+        body: JSON.stringify({
+          action,
+        }),
+      });
+
+      if (!response.ok) {
+        const payload = await response.json().catch(() => null);
+        throw new Error(payload?.error?.message ?? "更新通知状态失败。");
+      }
+
+      await refreshNotifications();
+    } catch (actionError) {
+      setError(actionError instanceof Error ? actionError.message : "更新通知状态失败。");
+    } finally {
+      setActioningId(null);
+    }
+  }
 
   useEffect(() => {
     let active = true;
@@ -250,6 +305,13 @@ export function NotificationsClient() {
           >
             已读
           </button>
+          <button
+            type="button"
+            className={`btn sm ${status === "archived" ? "primary" : "ghost"}`}
+            onClick={() => setStatus("archived")}
+          >
+            已忽略
+          </button>
         </div>
         <Link className="btn ghost sm" href="/hitl">
           去审批中心
@@ -286,6 +348,26 @@ export function NotificationsClient() {
                 <Link className="btn ghost sm" href={item.linkUrl}>
                   打开事项
                 </Link>
+              ) : null}
+              {!item.id.startsWith("hitl-") && item.status === "unread" ? (
+                <button
+                  type="button"
+                  className="btn ghost sm"
+                  disabled={actioningId === item.id}
+                  onClick={() => void handleNotificationAction(item.id, "read")}
+                >
+                  {actioningId === item.id ? "处理中…" : "标记已读"}
+                </button>
+              ) : null}
+              {!item.id.startsWith("hitl-") && item.status !== "archived" ? (
+                <button
+                  type="button"
+                  className="btn ghost sm"
+                  disabled={actioningId === item.id}
+                  onClick={() => void handleNotificationAction(item.id, "archive")}
+                >
+                  {actioningId === item.id ? "处理中…" : "忽略"}
+                </button>
               ) : null}
             </div>
           </div>

@@ -18,6 +18,7 @@ async function main() {
   await prisma.$executeRawUnsafe(`
     TRUNCATE TABLE
       "data_requests",
+      "tenant_settings",
       "notifications",
       "hitl_tasks",
       "replies",

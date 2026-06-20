@@ -207,8 +207,9 @@ enum NotificationType {
 }
 
 enum NotificationStatus {
-  UNREAD @map("unread")
-  READ   @map("read")
+  UNREAD   @map("unread")
+  READ     @map("read")
+  ARCHIVED @map("archived")
 }
 
 enum ModelRoute {
@@ -274,6 +275,7 @@ model Tenant {
   hitlTasks      HitlTask[]
   notifications  Notification[]
   dataRequests   DataRequest[]
+  tenantSettings TenantSetting[]
 
   @@map("tenants")
 }
@@ -313,6 +315,7 @@ model User {
   hitlRejected     HitlTask[]      @relation("HitlRejectedBy")
   notifications    Notification[]
   dataRequests     DataRequest[]
+  tenantSettingsUpdated TenantSetting[] @relation("TenantSettingUpdatedBy")
 
   @@map("users")
 }
@@ -989,6 +992,22 @@ model Notification {
   @@index([tenantId])
   @@index([userId, status])
   @@map("notifications")
+}
+
+model TenantSetting {
+  id              String   @id @default(cuid())
+  tenantId        String   @map("tenant_id")
+  key             String
+  value           Json
+  updatedByUserId String?  @map("updated_by_user_id")
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+  tenant          Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  updatedBy       User?    @relation("TenantSettingUpdatedBy", fields: [updatedByUserId], references: [id], onDelete: SetNull)
+
+  @@unique([tenantId, key])
+  @@index([tenantId])
+  @@map("tenant_settings")
 }
 
 model DataRequest {

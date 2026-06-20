@@ -35,12 +35,13 @@ a8b03ea fix: harden ci and settings operations
   内容包对话 (`/content-packs/[id]/chat`)、通知中心 (`/notifications`)、发布清单 (`/publish-checklist`)、设置 (`/settings`)。
   所有数据接线 / API 调用 / 权限判断均未改，只换外观或做聚合展示。
 - **权限与合规**：
-  - `/settings` 已接入成员管理、数据请求（导出 / 删除）、品牌摘要、模型路由、模型用量与审计基线；
+  - `/settings` 已接入成员管理、数据请求（导出 / 删除）、品牌配置表单、模型策略表单、模型用量与审计基线；
   - `t7.1` RBAC 测试已补齐 owner/admin/operator/sales/viewer 的权限覆盖；
   - `t7.2` 数据请求服务 / API / 测试已落地，保留审计链路。
 - **治理入口**：
   - 侧栏已新增 `/notifications` 与 `/publish-checklist`，顶部铃铛保留快捷入口并可跳完整通知页；
-  - `/publish-checklist` 聚合站点上线、内容发布与待审批任务，减少在 `/sites`、`/design`、`/hitl` 之间来回切换。
+  - `/publish-checklist` 聚合站点上线、内容发布与待审批任务，减少在 `/sites`、`/design`、`/hitl` 之间来回切换；
+  - `/notifications` 已支持对真实通知执行“标记已读 / 忽略(archived)”动作，派生的 HITL 待办仍需回具体事项处理。
 - **闭环验收与 CI**：
   - `T6.4` 18 步闭环验收测试已稳定化，不再依赖脆弱 seed 内容包模板；
   - GitHub Actions 现有 `quality` + `closed-loop` 两个 job，使用 `pgvector/pgvector:pg16`，并带 `ops:check-secrets` 检查；
@@ -52,7 +53,7 @@ a8b03ea fix: harden ci and settings operations
 ## 4. 待继续做（参照高保真原型）
 
 1. **对外站点页** `apps/web/app/site/[slug]/[locale]/page.tsx` 是客户访问的落地页，保持独立风格，不要套后台框架。
-2. **设置页下一步可补**：如果要继续深挖，优先补“可编辑”的品牌 / 模型配置表单，而不是只读摘要。
+2. **设置页下一步可补**：如果要继续深挖，优先补更细粒度的策略说明、变更历史和回滚，而不是继续堆只读摘要。
 3. **如果要继续做平台升级**：下一轮可以评估 Node 22 之外的依赖升级，但先以当前 CI 全绿为基线，不要在同一提交里混入无关重构。
 
 ## 5. 开发约定

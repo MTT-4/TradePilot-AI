@@ -40,14 +40,18 @@ function buildTaskLink(task: {
 
 export async function listNotifications(params: {
   tenantContext: TenantContext;
-  status?: "unread" | "read";
+  status?: "unread" | "read" | "archived";
 }) {
   const prisma = getPrismaClient();
   const notifications = await prisma.notification.findMany({
     where: {
       tenantId: params.tenantContext.tenantId,
       userId: params.tenantContext.userId,
-      status: params.status ? (params.status.toUpperCase() as NotificationStatus) : undefined,
+      status: params.status
+        ? (params.status.toUpperCase() as NotificationStatus)
+        : {
+            not: "ARCHIVED",
+          },
     },
     orderBy: {
       createdAt: "desc",
@@ -85,7 +89,9 @@ export async function listNotifications(params: {
   });
 
   const taskNotifications =
-    params.tenantContext.role === "VIEWER" || params.status === "read"
+    params.tenantContext.role === "VIEWER" ||
+    params.status === "read" ||
+    params.status === "archived"
       ? []
       : hitlTasks.map((task) => ({
           id: `hitl-${task.id}`,

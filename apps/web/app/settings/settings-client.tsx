@@ -100,7 +100,41 @@ type UsageResponse = {
   }>;
 };
 
+type BrandFormState = {
+  name: string;
+  companyName: string;
+  primaryColor: string;
+  secondaryColor: string;
+  tone: string;
+  logoUrl: string;
+};
+
+type ModelPolicyFormState = SettingsOverviewResponse["modelPolicy"];
+
 const ADMIN_ROLES = new Set(["owner", "admin"]);
+
+function createEmptyBrandForm(): BrandFormState {
+  return {
+    name: "",
+    companyName: "",
+    primaryColor: "",
+    secondaryColor: "",
+    tone: "",
+    logoUrl: "",
+  };
+}
+
+function createDefaultModelPolicyForm(): ModelPolicyFormState {
+  return {
+    privateTextRoute: "local_qwen",
+    embeddingRoute: "local_bge",
+    translationRoute: "google_translate",
+    externalTextRoute: "openai",
+    localQwenModel: "",
+    localBgeModel: "",
+    openaiModel: "",
+  };
+}
 
 async function fetchDataRequests(tenantId: string) {
   const response = await fetch("/api/data-requests", {
@@ -244,6 +278,10 @@ export function SettingsClient() {
   const [members, setMembers] = useState<MemberItem[]>([]);
   const [overview, setOverview] = useState<SettingsOverviewResponse | null>(null);
   const [usage, setUsage] = useState<UsageResponse | null>(null);
+  const [brandForm, setBrandForm] = useState<BrandFormState>(createEmptyBrandForm);
+  const [modelPolicyForm, setModelPolicyForm] = useState<ModelPolicyFormState>(
+    createDefaultModelPolicyForm,
+  );
   const [requestType, setRequestType] = useState<"export" | "delete">("export");
   const [channel, setChannel] = useState<"gdpr" | "pipl">("gdpr");
   const [subjectEmail, setSubjectEmail] = useState("");
@@ -255,6 +293,8 @@ export function SettingsClient() {
   const [submitting, setSubmitting] = useState(false);
   const [loading, setLoading] = useState(true);
   const [membersSubmitting, setMembersSubmitting] = useState(false);
+  const [brandSubmitting, setBrandSubmitting] = useState(false);
+  const [modelPolicySubmitting, setModelPolicySubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
 
@@ -295,6 +335,29 @@ export function SettingsClient() {
 
     const payload = await fetchMembers(tenantId);
     setMembers(payload.items);
+  }
+
+  async function refreshOverviewAndUsage(tenantId = selectedTenantId) {
+    if (!tenantId || !canManageCompliance) {
+      return;
+    }
+
+    const [overviewPayload, usagePayload] = await Promise.all([
+      fetchSettingsOverview(tenantId),
+      fetchUsage(tenantId),
+    ]);
+
+    setOverview(overviewPayload);
+    setUsage(usagePayload);
+    setBrandForm({
+      name: overviewPayload.brandKit?.name ?? "",
+      companyName: overviewPayload.brandKit?.companyName ?? "",
+      primaryColor: overviewPayload.brandKit?.primaryColor ?? "",
+      secondaryColor: overviewPayload.brandKit?.secondaryColor ?? "",
+      tone: overviewPayload.brandKit?.tone ?? "",
+      logoUrl: overviewPayload.brandKit?.logoUrl ?? "",
+    });
+    setModelPolicyForm(overviewPayload.modelPolicy);
   }
 
   async function handleCreateRequest() {
@@ -453,6 +516,80 @@ export function SettingsClient() {
     }
   }
 
+  async function handleSaveBrandKit() {
+    if (!selectedTenantId || !brandForm.name.trim() || !brandForm.companyName.trim()) {
+      setError("请至少填写品牌名称和公司名称。");
+      return;
+    }
+
+    setBrandSubmitting(true);
+    setError(null);
+    setSuccess(null);
+
+    try {
+      const response = await fetch("/api/settings/brand", {
+        method: "PATCH",
+        headers: {
+          "content-type": "application/json",
+          "X-Tenant-Id": selectedTenantId,
+        },
+        body: JSON.stringify({
+          name: brandForm.name.trim(),
+          companyName: brandForm.companyName.trim(),
+          primaryColor: brandForm.primaryColor.trim() || null,
+          secondaryColor: brandForm.secondaryColor.trim() || null,
+          tone: brandForm.tone.trim() || null,
+          logoUrl: brandForm.logoUrl.trim() || null,
+        }),
+      });
+
+      if (!response.ok) {
+        const payload = await response.json().catch(() => null);
+        throw new Error(payload?.error?.message ?? "更新品牌配置失败。");
+      }
+
+      setSuccess("品牌配置已更新。");
+      await refreshOverviewAndUsage();
+    } catch (requestError) {
+      setError(requestError instanceof Error ? requestError.message : "更新品牌配置失败。");
+    } finally {
+      setBrandSubmitting(false);
+    }
+  }
+
+  async function handleSaveModelPolicy() {
+    if (!selectedTenantId) {
+      return;
+    }
+
+    setModelPolicySubmitting(true);
+    setError(null);
+    setSuccess(null);
+
+    try {
+      const response = await fetch("/api/settings/model-policy", {
+        method: "PATCH",
+        headers: {
+          "content-type": "application/json",
+          "X-Tenant-Id": selectedTenantId,
+        },
+        body: JSON.stringify(modelPolicyForm),
+      });
+
+      if (!response.ok) {
+        const payload = await response.json().catch(() => null);
+        throw new Error(payload?.error?.message ?? "更新模型策略失败。");
+      }
+
+      setSuccess("模型策略已更新。");
+      await refreshOverviewAndUsage();
+    } catch (requestError) {
+      setError(requestError instanceof Error ? requestError.message : "更新模型策略失败。");
+    } finally {
+      setModelPolicySubmitting(false);
+    }
+  }
+
   useEffect(() => {
     let active = true;
 
@@ -538,6 +675,15 @@ export function SettingsClient() {
 
         setOverview(overviewPayload);
         setUsage(usagePayload);
+        setBrandForm({
+          name: overviewPayload.brandKit?.name ?? "",
+          companyName: overviewPayload.brandKit?.companyName ?? "",
+          primaryColor: overviewPayload.brandKit?.primaryColor ?? "",
+          secondaryColor: overviewPayload.brandKit?.secondaryColor ?? "",
+          tone: overviewPayload.brandKit?.tone ?? "",
+          logoUrl: overviewPayload.brandKit?.logoUrl ?? "",
+        });
+        setModelPolicyForm(overviewPayload.modelPolicy);
       })
       .catch((loadError) => {
         if (active) {
@@ -578,6 +724,8 @@ export function SettingsClient() {
               setLoading(true);
               setOverview(null);
               setUsage(null);
+              setBrandForm(createEmptyBrandForm());
+              setModelPolicyForm(createDefaultModelPolicyForm());
               setSuccess(null);
               setSelectedTenantId(event.target.value);
             }}
@@ -952,23 +1100,99 @@ export function SettingsClient() {
             </div>
 
             {canManageCompliance ? (
-              overview?.brandKit ? (
+              <>
                 <div className="pv-grid">
                   <div className="pv-card">
-                    <h4>{overview.brandKit.companyName}</h4>
-                    <p>
-                      Brand Kit 名称：{overview.brandKit.name}
-                      <br />
-                      最近更新：{formatTime(overview.brandKit.updatedAt)}
-                    </p>
-                    <div style={{ display: "flex", gap: 10, marginTop: 12, flexWrap: "wrap" }}>
-                      <span className="badge line">
-                        主色 {overview.brandKit.primaryColor ?? "未设置"}
-                      </span>
-                      <span className="badge line">
-                        辅色 {overview.brandKit.secondaryColor ?? "未设置"}
-                      </span>
-                      {overview.brandKit.logoUrl ? <span className="badge good">已配置 Logo</span> : null}
+                    <h4>编辑 Brand Kit</h4>
+                    <div
+                      style={{
+                        display: "grid",
+                        gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
+                        gap: 12,
+                        marginTop: 12,
+                      }}
+                    >
+                      <div className="field" style={{ marginBottom: 0 }}>
+                        <label>Brand Kit 名称</label>
+                        <input
+                          type="text"
+                          value={brandForm.name}
+                          onChange={(event) =>
+                            setBrandForm((current) => ({ ...current, name: event.target.value }))
+                          }
+                          placeholder="Shenghai Core Brand"
+                        />
+                      </div>
+                      <div className="field" style={{ marginBottom: 0 }}>
+                        <label>公司名称</label>
+                        <input
+                          type="text"
+                          value={brandForm.companyName}
+                          onChange={(event) =>
+                            setBrandForm((current) => ({ ...current, companyName: event.target.value }))
+                          }
+                          placeholder="晟海机械"
+                        />
+                      </div>
+                      <div className="field" style={{ marginBottom: 0 }}>
+                        <label>主色</label>
+                        <input
+                          type="text"
+                          value={brandForm.primaryColor}
+                          onChange={(event) =>
+                            setBrandForm((current) => ({ ...current, primaryColor: event.target.value }))
+                          }
+                          placeholder="#0C5C56"
+                        />
+                      </div>
+                      <div className="field" style={{ marginBottom: 0 }}>
+                        <label>辅色</label>
+                        <input
+                          type="text"
+                          value={brandForm.secondaryColor}
+                          onChange={(event) =>
+                            setBrandForm((current) => ({ ...current, secondaryColor: event.target.value }))
+                          }
+                          placeholder="#E9F4F2"
+                        />
+                      </div>
+                      <div className="field" style={{ marginBottom: 0 }}>
+                        <label>品牌语气</label>
+                        <input
+                          type="text"
+                          value={brandForm.tone}
+                          onChange={(event) =>
+                            setBrandForm((current) => ({ ...current, tone: event.target.value }))
+                          }
+                          placeholder="industrial and precise"
+                        />
+                      </div>
+                      <div className="field" style={{ marginBottom: 0 }}>
+                        <label>Logo URL</label>
+                        <input
+                          type="url"
+                          value={brandForm.logoUrl}
+                          onChange={(event) =>
+                            setBrandForm((current) => ({ ...current, logoUrl: event.target.value }))
+                          }
+                          placeholder="https://..."
+                        />
+                      </div>
+                    </div>
+                    <div className="head-row" style={{ marginTop: 14 }}>
+                      <div className="sub">
+                        {overview?.brandKit
+                          ? `最近更新：${formatTime(overview.brandKit.updatedAt)}`
+                          : "当前租户还没有 Brand Kit，保存后会创建第一条记录。"}
+                      </div>
+                      <button
+                        type="button"
+                        className="btn primary sm"
+                        disabled={brandSubmitting || !brandForm.name.trim() || !brandForm.companyName.trim()}
+                        onClick={() => void handleSaveBrandKit()}
+                      >
+                        {brandSubmitting ? "保存中…" : "保存品牌配置"}
+                      </button>
                     </div>
                   </div>
                   <div className="pv-panel">
@@ -976,24 +1200,26 @@ export function SettingsClient() {
                     <div className="pv-stack" style={{ marginTop: 10 }}>
                       <div className="pv-note">
                         <b>品牌语气</b>
-                        <p>{overview.brandKit.tone ?? "未在 metadata.tone 中设置，当前走工业 B2B 默认语气。"}</p>
+                        <p>{overview?.brandKit?.tone ?? "未在 metadata.tone 中设置，当前走工业 B2B 默认语气。"}</p>
                       </div>
                       <div className="pv-note">
                         <b>站点覆盖</b>
                         <p>
-                          已发布站点 {overview.sitePortfolio.publishedSites} / {overview.sitePortfolio.totalSites}，
-                          当前共维护 {overview.sitePortfolio.localeCount} 个语言版本。
+                          已发布站点 {overview?.sitePortfolio.publishedSites ?? 0} / {overview?.sitePortfolio.totalSites ?? 0}，
+                          当前共维护 {overview?.sitePortfolio.localeCount ?? 0} 个语言版本。
+                        </p>
+                      </div>
+                      <div className="pv-note">
+                        <b>当前配色</b>
+                        <p>
+                          主色 {overview?.brandKit?.primaryColor ?? "未设置"} / 辅色{" "}
+                          {overview?.brandKit?.secondaryColor ?? "未设置"}
                         </p>
                       </div>
                     </div>
                   </div>
                 </div>
-              ) : (
-                <div className="card empty">
-                  <div className="t">当前租户还没有 Brand Kit</div>
-                  <div className="s">后续可以补一个品牌设置表单或从内容包编辑器回填。</div>
-                </div>
-              )
+              </>
             ) : (
               <div
                 className="card"
@@ -1022,29 +1248,134 @@ export function SettingsClient() {
             {canManageCompliance ? (
               <div className="pv-grid">
                 <div className="pv-card">
-                  <h4>隐私优先路由</h4>
-                  <ul className="pv-bullets">
-                    <li>文本生成 / 分类（含 PII）: {overview?.modelPolicy.privateTextRoute ?? "local_qwen"}</li>
-                    <li>向量嵌入: {overview?.modelPolicy.embeddingRoute ?? "local_bge"}</li>
-                    <li>翻译: {overview?.modelPolicy.translationRoute ?? "google_translate"}</li>
-                    <li>非 PII 外部生成: {overview?.modelPolicy.externalTextRoute ?? "openai_when_non_pii"}</li>
-                  </ul>
+                  <h4>编辑策略</h4>
+                  <div className="field">
+                    <label>隐私文本路由（固定）</label>
+                    <select
+                      value={modelPolicyForm.privateTextRoute}
+                      onChange={(event) =>
+                        setModelPolicyForm((current) => ({
+                          ...current,
+                          privateTextRoute: event.target.value,
+                        }))
+                      }
+                      disabled
+                    >
+                      <option value="local_qwen">local_qwen</option>
+                    </select>
+                  </div>
+                  <div className="field">
+                    <label>向量路由（固定）</label>
+                    <select
+                      value={modelPolicyForm.embeddingRoute}
+                      onChange={(event) =>
+                        setModelPolicyForm((current) => ({
+                          ...current,
+                          embeddingRoute: event.target.value,
+                        }))
+                      }
+                      disabled
+                    >
+                      <option value="local_bge">local_bge</option>
+                    </select>
+                  </div>
+                  <div className="field">
+                    <label>翻译路由</label>
+                    <select
+                      value={modelPolicyForm.translationRoute}
+                      onChange={(event) =>
+                        setModelPolicyForm((current) => ({
+                          ...current,
+                          translationRoute: event.target.value,
+                        }))
+                      }
+                    >
+                      <option value="google_translate">google_translate</option>
+                      <option value="local_qwen">local_qwen</option>
+                    </select>
+                  </div>
+                  <div className="field" style={{ marginBottom: 0 }}>
+                    <label>非 PII 外部文本路由</label>
+                    <select
+                      value={modelPolicyForm.externalTextRoute}
+                      onChange={(event) =>
+                        setModelPolicyForm((current) => ({
+                          ...current,
+                          externalTextRoute: event.target.value,
+                        }))
+                      }
+                    >
+                      <option value="openai">openai</option>
+                      <option value="local_qwen">local_qwen</option>
+                    </select>
+                  </div>
                 </div>
                 <div className="pv-panel">
-                  <h4>当前模型名</h4>
+                  <h4>模型名覆盖</h4>
                   <div className="pv-stack" style={{ marginTop: 10 }}>
                     <div className="pv-note">
                       <b>LOCAL_QWEN_MODEL</b>
-                      <p>{overview?.modelPolicy.localQwenModel ?? "—"}</p>
+                      <p>
+                        <input
+                          type="text"
+                          value={modelPolicyForm.localQwenModel}
+                          onChange={(event) =>
+                            setModelPolicyForm((current) => ({
+                              ...current,
+                              localQwenModel: event.target.value,
+                            }))
+                          }
+                        />
+                      </p>
                     </div>
                     <div className="pv-note">
                       <b>LOCAL_BGE_MODEL</b>
-                      <p>{overview?.modelPolicy.localBgeModel ?? "—"}</p>
+                      <p>
+                        <input
+                          type="text"
+                          value={modelPolicyForm.localBgeModel}
+                          onChange={(event) =>
+                            setModelPolicyForm((current) => ({
+                              ...current,
+                              localBgeModel: event.target.value,
+                            }))
+                          }
+                        />
+                      </p>
                     </div>
                     <div className="pv-note">
                       <b>OPENAI_MODEL</b>
-                      <p>{overview?.modelPolicy.openaiModel ?? "—"}</p>
+                      <p>
+                        <input
+                          type="text"
+                          value={modelPolicyForm.openaiModel}
+                          onChange={(event) =>
+                            setModelPolicyForm((current) => ({
+                              ...current,
+                              openaiModel: event.target.value,
+                            }))
+                          }
+                        />
+                      </p>
                     </div>
+                  </div>
+                  <div className="head-row" style={{ marginTop: 14 }}>
+                    <div className="sub">
+                      保存后会影响新的模型调用路由与模型名选择；隐私文本仍强制走本地 Qwen。
+                    </div>
+                    <button
+                      type="button"
+                      className="btn primary sm"
+                      disabled={
+                        modelPolicySubmitting ||
+                        !modelPolicyForm.localQwenModel.trim() ||
+                        !modelPolicyForm.localBgeModel.trim() ||
+                        !modelPolicyForm.openaiModel.trim()
+                      }
+                      onClick={() => void handleSaveModelPolicy()}
+                    >
+                      {modelPolicySubmitting ? "保存中…" : "保存模型策略"}
+                    </button>
                   </div>
                 </div>
               </div>

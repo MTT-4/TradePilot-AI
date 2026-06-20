@@ -9,6 +9,7 @@ import { getEnv } from "@/lib/env";
 import { ApiError } from "@/server/api/errors";
 import type { TenantContext } from "@/server/db/tenant-context";
 import { getTenantPrisma } from "@/server/db/tenant-prisma";
+import { getResolvedModelPolicy, toModelRoute } from "@/server/settings/service";
 
 type FetchLike = typeof fetch;
 
@@ -666,9 +667,10 @@ async function classifySensitivity(params: {
 function getRouteForOperation(params: {
   operation: "invoke" | "translate" | "embed";
   containsPii: boolean;
+  modelPolicy: Awaited<ReturnType<typeof getResolvedModelPolicy>>;
 }) {
   if (params.operation === "embed") {
-    return ModelRoute.LOCAL_BGE;
+    return toModelRoute(params.modelPolicy.embeddingRoute);
   }
 
   if (params.containsPii) {
@@ -676,24 +678,27 @@ function getRouteForOperation(params: {
   }
 
   if (params.operation === "translate") {
-    return ModelRoute.GOOGLE_TRANSLATE;
+    return toModelRoute(params.modelPolicy.translationRoute);
   }
 
-  return ModelRoute.OPENAI;
+  return toModelRoute(params.modelPolicy.externalTextRoute);
 }
 
-function getModelNameForRoute(route: ModelRoute) {
+function getModelNameForRoute(
+  route: ModelRoute,
+  modelPolicy: Awaited<ReturnType<typeof getResolvedModelPolicy>>,
+) {
   const env = getEnv();
 
   switch (route) {
     case ModelRoute.OPENAI:
-      return env.OPENAI_MODEL;
+      return modelPolicy.openaiModel || env.OPENAI_MODEL;
     case ModelRoute.GOOGLE_TRANSLATE:
       return "google-translate";
     case ModelRoute.LOCAL_QWEN:
-      return env.LOCAL_QWEN_MODEL;
+      return modelPolicy.localQwenModel || env.LOCAL_QWEN_MODEL;
     case ModelRoute.LOCAL_BGE:
-      return env.LOCAL_BGE_MODEL;
+      return modelPolicy.localBgeModel || env.LOCAL_BGE_MODEL;
   }
 }
 
@@ -730,6 +735,7 @@ export function createModelGateway(deps?: { fetchImpl?: FetchLike }) {
   return {
     async invoke(input: InvokeInput) {
       const env = getEnv();
+      const modelPolicy = await getResolvedModelPolicy(input.tenantContext);
       const classification = await classifySensitivity({
         fetchImpl,
         tenantContext: input.tenantContext,
@@ -743,6 +749,7 @@ export function createModelGateway(deps?: { fetchImpl?: FetchLike }) {
       const route = getRouteForOperation({
         operation: "invoke",
         containsPii: classification.containsPii,
+        modelPolicy,
       });
       const startedAt = Date.now();
       const knowledgeContext = buildKnowledgeContext(
@@ -760,7 +767,7 @@ export function createModelGateway(deps?: { fetchImpl?: FetchLike }) {
                 fetchImpl,
                 baseUrl: env.OPENAI_BASE_URL,
                 apiKey: env.OPENAI_API_KEY,
-                model: env.OPENAI_MODEL,
+                model: modelPolicy.openaiModel,
                 systemPrompt: input.systemPrompt,
                 userPrompt,
                 temperature: input.temperature,
@@ -768,7 +775,7 @@ export function createModelGateway(deps?: { fetchImpl?: FetchLike }) {
             : await callOpenAiCompatibleTextModel({
                 fetchImpl,
                 baseUrl: env.LOCAL_QWEN_BASE_URL,
-                model: env.LOCAL_QWEN_MODEL,
+                model: modelPolicy.localQwenModel,
                 systemPrompt: input.systemPrompt,
                 userPrompt,
                 temperature: input.temperature,
@@ -804,7 +811,7 @@ export function createModelGateway(deps?: { fetchImpl?: FetchLike }) {
             userId: input.userId,
             route,
             taskType: input.taskType,
-            modelName: getModelNameForRoute(route),
+            modelName: getModelNameForRoute(route, modelPolicy),
             containsPii: classification.containsPii,
             reason: `${classification.reason}:local_unavailable`,
             requestSummary: trimSummary(input.requestSummary, input.prompt),
@@ -827,6 +834,7 @@ export function createModelGateway(deps?: { fetchImpl?: FetchLike }) {
 
     async translate(input: TranslateInput) {
       const env = getEnv();
+      const modelPolicy = await getResolvedModelPolicy(input.tenantContext);
       const classification = await classifySensitivity({
         fetchImpl,
         tenantContext: input.tenantContext,
@@ -840,6 +848,7 @@ export function createModelGateway(deps?: { fetchImpl?: FetchLike }) {
       const route = getRouteForOperation({
         operation: "translate",
         containsPii: classification.containsPii,
+        modelPolicy,
       });
       const startedAt = Date.now();
 
@@ -857,7 +866,7 @@ export function createModelGateway(deps?: { fetchImpl?: FetchLike }) {
             : await callOpenAiCompatibleTextModel({
                 fetchImpl,
                 baseUrl: env.LOCAL_QWEN_BASE_URL,
-                model: env.LOCAL_QWEN_MODEL,
+                model: modelPolicy.localQwenModel,
                 systemPrompt:
                   "Translate the text accurately while preserving product names, numbers, and business intent.",
                 userPrompt: `Source locale: ${input.sourceLocale ?? "auto"}\nTarget locale: ${input.targetLocale}\n\n${input.text}`,
@@ -894,7 +903,7 @@ export function createModelGateway(deps?: { fetchImpl?: FetchLike }) {
             userId: input.userId,
             route,
             taskType: input.taskType,
-            modelName: getModelNameForRoute(route),
+            modelName: getModelNameForRoute(route, modelPolicy),
             containsPii: classification.containsPii,
             reason: `${classification.reason}:local_unavailable`,
             requestSummary: trimSummary(input.requestSummary, input.text),
@@ -917,6 +926,7 @@ export function createModelGateway(deps?: { fetchImpl?: FetchLike }) {
 
     async embed(input: EmbedInput) {
       const env = getEnv();
+      const modelPolicy = await getResolvedModelPolicy(input.tenantContext);
       const classification = await classifySensitivity({
         fetchImpl,
         tenantContext: input.tenantContext,
@@ -930,6 +940,7 @@ export function createModelGateway(deps?: { fetchImpl?: FetchLike }) {
       const route = getRouteForOperation({
         operation: "embed",
         containsPii: classification.containsPii,
+        modelPolicy,
       });
       const startedAt = Date.now();
 
@@ -937,7 +948,7 @@ export function createModelGateway(deps?: { fetchImpl?: FetchLike }) {
         const result = await callOpenAiCompatibleEmbeddingModel({
           fetchImpl,
           baseUrl: env.LOCAL_BGE_BASE_URL,
-          model: env.LOCAL_BGE_MODEL,
+          model: modelPolicy.localBgeModel,
           input: input.text,
         });
         const invocationId = await recordInvocation({
@@ -968,7 +979,7 @@ export function createModelGateway(deps?: { fetchImpl?: FetchLike }) {
           userId: input.userId,
           route,
           taskType: input.taskType,
-          modelName: getModelNameForRoute(route),
+          modelName: getModelNameForRoute(route, modelPolicy),
           containsPii: classification.containsPii,
           reason: `${classification.reason}:local_unavailable`,
           requestSummary: trimSummary(input.requestSummary, input.text),

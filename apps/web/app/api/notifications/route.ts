@@ -5,7 +5,7 @@ import { requireTenantAccess } from "@/server/auth/access";
 import { routeErrorToResponse } from "@/server/api/errors";
 import { listNotifications } from "@/server/notifications/service";
 
-const statusSchema = z.enum(["unread", "read"]);
+const statusSchema = z.enum(["unread", "read", "archived"]);
 
 export const GET = auth(async (request) => {
   try {

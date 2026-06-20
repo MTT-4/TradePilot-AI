@@ -107,14 +107,13 @@ a8b03ea fix: harden ci and settings operations
 
 ### 4.4 闭环缺口：AI 首响（本地 Qwen）审阅 / 编辑 / 发送界面（需 DB 环境）
 
-现状：后端只有 `requestReplyDraft`（建草稿+建 REPLY_SEND HITL 任务）和 `approveReplySendTask`（审批即发送），
-见 `apps/web/server/replies/service.ts`；**前端完全没有首响相关界面**，`/hitl` 只能盲批。
-这是闭环核心一环（本地 Qwen 首响草稿 → 人工审 → 发送），原型有专门的"AI 首响审批"屏（询盘正文 + 草稿对照 + 编辑/拒绝/发送）。待做：
+现状（已部分完成）：起草入口已在 `/crm` 询盘处（"用 AI 起草首响" → `POST /api/replies/draft`）；
+`/replies` 审阅页**壳已建**（列 reply_send 任务、询盘↔草稿双栏、"确认并发送"走 `/api/hitl/[id]/approve`）。
+**仍缺后端**：获取/编辑草稿详情，导致 `/replies` 左右两栏只能显示占位、不能改文案。待做：
 
 1. 后端补「获取草稿详情」与「编辑草稿正文」接口（如 `GET /api/replies/[id]`、`PATCH /api/replies/[id]`），
    只允许 sales 及以上、PENDING_APPROVAL 状态可改；隐私红线：草稿生成只走本地 Qwen。
-2. 新建 `/replies` 审阅页（套 AppShell）：左侧询盘正文（含机器翻译），右侧本地 Qwen 草稿，
-   支持编辑、拒绝、确认发送（发送沿用 `approveReplySendTask` / `/api/hitl/[id]/approve`）。复用 `.reply-grid/.inq/.draft/.cite` 等类。
+2. 把 `/replies` 壳的询盘正文 / 草稿接上真实数据并开放编辑保存（壳已就绪，复用 `.reply-grid/.inq/.draft/.cite`）。
 3. 起草入口：在询盘/线索处加"用 AI 起草首响"按钮 → `POST /api/replies/draft`。
 4. 侧栏可把"AI 首响审批"指向 `/replies`（目前指向 `/hitl`）。
 
@@ -129,7 +128,9 @@ a8b03ea fix: harden ci and settings operations
 ### 4.6 缺口（低优先 / 部分属 M7）
 
 - 任务监控页：`/api/jobs`、`/api/jobs/[id]` 有接口、无界面，可加只读运维页。
-- 追踪链接管理页、租户创建/切换：原型/M7 范围，可缓做。
+- 追踪链接管理页：原型/M7 范围，可缓做。
+- 租户创建/切换：**已完成**——顶栏租户菜单可切换/新建（`POST /api/tenants`），首选租户存 localStorage、
+  由 `fetchCurrentMe` 带 `X-Tenant-Id`，全站 `currentTenant` 一致。
 
 ## 5. 开发约定
 

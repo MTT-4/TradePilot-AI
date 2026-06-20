@@ -32,11 +32,15 @@ a8b03ea fix: harden ci and settings operations
 - **字体**：`layout.tsx` 用 next/font 接入 Space Grotesk / Inter / Space Mono，变量对应 globals.css 的 `--font-*`。
 - **已按原型改版的页面**：工作台 (`/`)、登录 (`/login`)、知识库 (`/kb/reviews`)、站点 (`/sites`)、
   内容包 (`/design`)、CRM (`/crm`)、首响审批 (`/hitl`)、站点对话编辑 (`/sites/[id]/chat`)、
-  内容包对话 (`/content-packs/[id]/chat`)、设置 (`/settings`)。所有数据接线 / API 调用 / 权限判断均未改，只换外观。
+  内容包对话 (`/content-packs/[id]/chat`)、通知中心 (`/notifications`)、发布清单 (`/publish-checklist`)、设置 (`/settings`)。
+  所有数据接线 / API 调用 / 权限判断均未改，只换外观或做聚合展示。
 - **权限与合规**：
-  - `/settings` 已接入成员管理与数据请求（导出 / 删除）控制台；
+  - `/settings` 已接入成员管理、数据请求（导出 / 删除）、品牌摘要、模型路由、模型用量与审计基线；
   - `t7.1` RBAC 测试已补齐 owner/admin/operator/sales/viewer 的权限覆盖；
   - `t7.2` 数据请求服务 / API / 测试已落地，保留审计链路。
+- **治理入口**：
+  - 侧栏已新增 `/notifications` 与 `/publish-checklist`，顶部铃铛保留快捷入口并可跳完整通知页；
+  - `/publish-checklist` 聚合站点上线、内容发布与待审批任务，减少在 `/sites`、`/design`、`/hitl` 之间来回切换。
 - **闭环验收与 CI**：
   - `T6.4` 18 步闭环验收测试已稳定化，不再依赖脆弱 seed 内容包模板；
   - GitHub Actions 现有 `quality` + `closed-loop` 两个 job，使用 `pgvector/pgvector:pg16`，并带 `ops:check-secrets` 检查；
@@ -47,9 +51,8 @@ a8b03ea fix: harden ci and settings operations
 
 ## 4. 待继续做（参照高保真原型）
 
-1. **原型里仍可继续补齐的独立模块**：发布清单、通知中心，以及设置下更细的品牌 / 模型 / 用量分区。
-   按需新建路由并复用现有组件类（`tbl / mark / set-grid / set-nav / usebar` 等）。
-2. **对外站点页** `apps/web/app/site/[slug]/[locale]/page.tsx` 是客户访问的落地页，保持独立风格，不要套后台框架。
+1. **对外站点页** `apps/web/app/site/[slug]/[locale]/page.tsx` 是客户访问的落地页，保持独立风格，不要套后台框架。
+2. **设置页下一步可补**：如果要继续深挖，优先补“可编辑”的品牌 / 模型配置表单，而不是只读摘要。
 3. **如果要继续做平台升级**：下一轮可以评估 Node 22 之外的依赖升级，但先以当前 CI 全绿为基线，不要在同一提交里混入无关重构。
 
 ## 5. 开发约定

@@ -41,6 +41,65 @@ type MembersResponse = {
   items: MemberItem[];
 };
 
+type SettingsOverviewResponse = {
+  brandKit: {
+    id: string;
+    name: string;
+    companyName: string;
+    primaryColor: string | null;
+    secondaryColor: string | null;
+    logoUrl: string | null;
+    tone: string | null;
+    updatedAt: string;
+  } | null;
+  sitePortfolio: {
+    totalSites: number;
+    publishedSites: number;
+    localeCount: number;
+  };
+  notifications: {
+    unreadCount: number;
+    pendingApprovals: number;
+  };
+  modelPolicy: {
+    privateTextRoute: string;
+    embeddingRoute: string;
+    translationRoute: string;
+    externalTextRoute: string;
+    localQwenModel: string;
+    localBgeModel: string;
+    openaiModel: string;
+  };
+};
+
+type UsageResponse = {
+  creditsBalance: string;
+  summary: {
+    recentInvocationCount: number;
+    piiInvocationCount: number;
+    totalTokensInput: number;
+    totalTokensOutput: number;
+    averageLatencyMs: number;
+    totalCostUsd: string;
+    routeBreakdown: Array<{
+      route: string;
+      count: number;
+    }>;
+  };
+  recent: Array<{
+    id: string;
+    route: string;
+    taskType: string;
+    modelName: string;
+    containsPii: boolean;
+    tokensInput: number;
+    tokensOutput: number;
+    latencyMs: number;
+    costUsd: string;
+    createdAt: string;
+  }>;
+};
+
 const ADMIN_ROLES = new Set(["owner", "admin"]);
 
 async function fetchDataRequests(tenantId: string) {
@@ -71,6 +130,36 @@ async function fetchMembers(tenantId: string) {
   }
 
   return (await response.json()) as MembersResponse;
+}
+
+async function fetchSettingsOverview(tenantId: string) {
+  const response = await fetch("/api/settings/overview", {
+    headers: {
+      "X-Tenant-Id": tenantId,
+    },
+  });
+
+  if (!response.ok) {
+    const payload = await response.json().catch(() => null);
+    throw new Error(payload?.error?.message ?? "加载品牌与模型信息失败。");
+  }
+
+  return (await response.json()) as SettingsOverviewResponse;
+}
+
+async function fetchUsage(tenantId: string) {
+  const response = await fetch("/api/usage", {
+    headers: {
+      "X-Tenant-Id": tenantId,
+    },
+  });
+
+  if (!response.ok) {
+    const payload = await response.json().catch(() => null);
+    throw new Error(payload?.error?.message ?? "加载模型用量失败。");
+  }
+
+  return (await response.json()) as UsageResponse;
 }
 
 function formatTime(value: string | null) {
@@ -153,6 +242,8 @@ export function SettingsClient() {
   const [selectedTenantId, setSelectedTenantId] = useState("");
   const [items, setItems] = useState<DataRequestItem[]>([]);
   const [members, setMembers] = useState<MemberItem[]>([]);
+  const [overview, setOverview] = useState<SettingsOverviewResponse | null>(null);
+  const [usage, setUsage] = useState<UsageResponse | null>(null);
   const [requestType, setRequestType] = useState<"export" | "delete">("export");
   const [channel, setChannel] = useState<"gdpr" | "pipl">("gdpr");
   const [subjectEmail, setSubjectEmail] = useState("");
@@ -432,9 +523,36 @@ export function SettingsClient() {
     };
   }, [canManageCompliance, selectedTenantId]);
 
+  useEffect(() => {
+    if (!selectedTenantId || !canManageCompliance) {
+      return;
+    }
+
+    let active = true;
+
+    void Promise.all([fetchSettingsOverview(selectedTenantId), fetchUsage(selectedTenantId)])
+      .then(([overviewPayload, usagePayload]) => {
+        if (!active) {
+          return;
+        }
+
+        setOverview(overviewPayload);
+        setUsage(usagePayload);
+      })
+      .catch((loadError) => {
+        if (active) {
+          setError(loadError instanceof Error ? loadError.message : "加载设置概览失败。");
+        }
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [canManageCompliance, selectedTenantId]);
+
   const pendingCount = items.filter((item) => item.status === "pending").length;
-  const completedCount = items.filter((item) => item.status === "completed").length;
-  const deleteCount = items.filter((item) => item.type === "delete").length;
+  const unreadNotifications = overview?.notifications.unreadCount ?? 0;
+  const creditsBalance = usage?.creditsBalance ?? "0";
   const visibleItems = canManageCompliance ? items : [];
   const visibleLoading = canManageCompliance ? loading : false;
   const visibleMembers = canManageCompliance ? members : [];
@@ -444,12 +562,12 @@ export function SettingsClient() {
     <>
       <div className="head-row">
         <div>
-          <div className="eyebrow">合规与权限</div>
+          <div className="eyebrow">设置 / 治理</div>
           <h2 className="sec" style={{ marginTop: 4 }}>
-            GDPR / PIPL 数据请求与 RBAC 基线
+            品牌、模型、合规与权限
           </h2>
           <div className="sub" style={{ marginTop: 4 }}>
-            管理导出/删除请求，明确谁能审批站点、内容与首响，所有动作都写审计日志。
+            复用现有租户数据，把品牌摘要、模型路由、用量、成员与合规动作收口到统一设置页。
           </div>
         </div>
         {me && me.memberships.length > 0 ? (
@@ -458,6 +576,8 @@ export function SettingsClient() {
             value={selectedTenantId}
             onChange={(event) => {
               setLoading(true);
+              setOverview(null);
+              setUsage(null);
               setSuccess(null);
               setSelectedTenantId(event.target.value);
             }}
@@ -509,12 +629,12 @@ export function SettingsClient() {
           <div className="l">待处理请求</div>
         </div>
         <div className="stat">
-          <div className="v">{completedCount}</div>
-          <div className="l">已完成请求</div>
+          <div className="v">{unreadNotifications}</div>
+          <div className="l">未读治理提醒</div>
         </div>
         <div className="stat">
-          <div className="v">{deleteCount}</div>
-          <div className="l">删除请求</div>
+          <div className="v">{creditsBalance}</div>
+          <div className="l">当前 Credits 余额</div>
         </div>
       </div>
 
@@ -524,6 +644,9 @@ export function SettingsClient() {
             数据请求
           </a>
           <a href="#members">成员权限</a>
+          <a href="#brand">品牌资料</a>
+          <a href="#models">模型路由</a>
+          <a href="#usage">模型用量</a>
           <a href="#roles">权限矩阵</a>
           <a href="#audit">审计基线</a>
         </div>
@@ -817,6 +940,249 @@ export function SettingsClient() {
             )}
           </div>
 
+          <div className="card set-block" id="brand">
+            <div className="head-row" style={{ marginBottom: 10 }}>
+              <div>
+                <h3>品牌资料</h3>
+                <div className="sub">读取最新 Brand Kit，用于站点、内容包和图片生成的一致风格控制。</div>
+              </div>
+              <span className="badge line">
+                {overview?.sitePortfolio.totalSites ?? 0} 个站点 / {overview?.sitePortfolio.localeCount ?? 0} 个 locale
+              </span>
+            </div>
+
+            {canManageCompliance ? (
+              overview?.brandKit ? (
+                <div className="pv-grid">
+                  <div className="pv-card">
+                    <h4>{overview.brandKit.companyName}</h4>
+                    <p>
+                      Brand Kit 名称：{overview.brandKit.name}
+                      <br />
+                      最近更新：{formatTime(overview.brandKit.updatedAt)}
+                    </p>
+                    <div style={{ display: "flex", gap: 10, marginTop: 12, flexWrap: "wrap" }}>
+                      <span className="badge line">
+                        主色 {overview.brandKit.primaryColor ?? "未设置"}
+                      </span>
+                      <span className="badge line">
+                        辅色 {overview.brandKit.secondaryColor ?? "未设置"}
+                      </span>
+                      {overview.brandKit.logoUrl ? <span className="badge good">已配置 Logo</span> : null}
+                    </div>
+                  </div>
+                  <div className="pv-panel">
+                    <h4>品牌摘要</h4>
+                    <div className="pv-stack" style={{ marginTop: 10 }}>
+                      <div className="pv-note">
+                        <b>品牌语气</b>
+                        <p>{overview.brandKit.tone ?? "未在 metadata.tone 中设置，当前走工业 B2B 默认语气。"}</p>
+                      </div>
+                      <div className="pv-note">
+                        <b>站点覆盖</b>
+                        <p>
+                          已发布站点 {overview.sitePortfolio.publishedSites} / {overview.sitePortfolio.totalSites}，
+                          当前共维护 {overview.sitePortfolio.localeCount} 个语言版本。
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                <div className="card empty">
+                  <div className="t">当前租户还没有 Brand Kit</div>
+                  <div className="s">后续可以补一个品牌设置表单或从内容包编辑器回填。</div>
+                </div>
+              )
+            ) : (
+              <div
+                className="card"
+                style={{
+                  padding: "12px 14px",
+                  background: "var(--surface-2)",
+                  borderStyle: "dashed",
+                }}
+              >
+                只有 Owner / Admin 可以查看品牌摘要与模型用量。
+              </div>
+            )}
+          </div>
+
+          <div className="card set-block" id="models">
+            <div className="head-row" style={{ marginBottom: 10 }}>
+              <div>
+                <h3>模型路由</h3>
+                <div className="sub">用文档化方式把隐私路由讲清楚，避免前端同学误把敏感请求送到第三方模型。</div>
+              </div>
+              <Link className="btn ghost sm" href="/kb/reviews">
+                看知识基线
+              </Link>
+            </div>
+
+            {canManageCompliance ? (
+              <div className="pv-grid">
+                <div className="pv-card">
+                  <h4>隐私优先路由</h4>
+                  <ul className="pv-bullets">
+                    <li>文本生成 / 分类（含 PII）: {overview?.modelPolicy.privateTextRoute ?? "local_qwen"}</li>
+                    <li>向量嵌入: {overview?.modelPolicy.embeddingRoute ?? "local_bge"}</li>
+                    <li>翻译: {overview?.modelPolicy.translationRoute ?? "google_translate"}</li>
+                    <li>非 PII 外部生成: {overview?.modelPolicy.externalTextRoute ?? "openai_when_non_pii"}</li>
+                  </ul>
+                </div>
+                <div className="pv-panel">
+                  <h4>当前模型名</h4>
+                  <div className="pv-stack" style={{ marginTop: 10 }}>
+                    <div className="pv-note">
+                      <b>LOCAL_QWEN_MODEL</b>
+                      <p>{overview?.modelPolicy.localQwenModel ?? "—"}</p>
+                    </div>
+                    <div className="pv-note">
+                      <b>LOCAL_BGE_MODEL</b>
+                      <p>{overview?.modelPolicy.localBgeModel ?? "—"}</p>
+                    </div>
+                    <div className="pv-note">
+                      <b>OPENAI_MODEL</b>
+                      <p>{overview?.modelPolicy.openaiModel ?? "—"}</p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <div
+                className="card"
+                style={{
+                  padding: "12px 14px",
+                  background: "var(--surface-2)",
+                  borderStyle: "dashed",
+                }}
+              >
+                当前角色只能看 RBAC 和审计说明，模型配置由 Owner / Admin 管理。
+              </div>
+            )}
+          </div>
+
+          <div className="card set-block" id="usage">
+            <div className="head-row" style={{ marginBottom: 10 }}>
+              <div>
+                <h3>模型用量</h3>
+                <div className="sub">基于最近 20 次模型调用汇总速度、成本、PII 命中与路线分布。</div>
+              </div>
+              <span className="badge line">Credits {creditsBalance}</span>
+            </div>
+
+            {canManageCompliance ? (
+              <>
+                <div className="stat-strip" style={{ gridTemplateColumns: "repeat(4, 1fr)", marginBottom: 14 }}>
+                  <div className="stat">
+                    <div className="v">{usage?.summary.recentInvocationCount ?? 0}</div>
+                    <div className="l">近 20 次调用</div>
+                  </div>
+                  <div className="stat">
+                    <div className="v">{usage?.summary.piiInvocationCount ?? 0}</div>
+                    <div className="l">PII 命中</div>
+                  </div>
+                  <div className="stat">
+                    <div className="v">{usage?.summary.averageLatencyMs ?? 0}</div>
+                    <div className="l">平均延迟 ms</div>
+                  </div>
+                  <div className="stat">
+                    <div className="v">{usage?.summary.totalCostUsd ?? "0.0000"}</div>
+                    <div className="l">累计成本 USD</div>
+                  </div>
+                </div>
+
+                <div className="pv-grid" style={{ marginBottom: 14 }}>
+                  <div className="pv-card">
+                    <h4>Token 汇总</h4>
+                    <p>输入 {usage?.summary.totalTokensInput ?? 0} / 输出 {usage?.summary.totalTokensOutput ?? 0}</p>
+                    <div className="usebar">
+                      <i
+                        style={{
+                          width: `${
+                            usage && usage.summary.totalTokensInput + usage.summary.totalTokensOutput > 0
+                              ? Math.max(
+                                  8,
+                                  (usage.summary.totalTokensInput /
+                                    (usage.summary.totalTokensInput + usage.summary.totalTokensOutput)) *
+                                    100,
+                                )
+                              : 0
+                          }%`,
+                        }}
+                      />
+                    </div>
+                    <div className="sub">色条表示输入 tokens 在最近调用中的占比。</div>
+                  </div>
+                  <div className="pv-panel">
+                    <h4>路由分布</h4>
+                    <div className="pv-stack" style={{ marginTop: 10 }}>
+                      {(usage?.summary.routeBreakdown ?? []).map((item) => (
+                        <div className="pv-note" key={item.route}>
+                          <b>{item.route}</b>
+                          <p>{item.count} 次最近调用</p>
+                        </div>
+                      ))}
+                      {(usage?.summary.routeBreakdown ?? []).length === 0 ? (
+                        <div className="pv-note">
+                          <b>暂无数据</b>
+                          <p>当前租户还没有模型调用记录。</p>
+                        </div>
+                      ) : null}
+                    </div>
+                  </div>
+                </div>
+
+                <div className="card" style={{ padding: "6px 18px" }}>
+                  <table className="tbl">
+                    <thead>
+                      <tr>
+                        <th>时间</th>
+                        <th>Route</th>
+                        <th>Task</th>
+                        <th>Model</th>
+                        <th>PII</th>
+                        <th>Tokens</th>
+                        <th>Latency</th>
+                        <th>Cost</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {(usage?.recent ?? []).map((item) => (
+                        <tr key={item.id}>
+                          <td>{formatTime(item.createdAt)}</td>
+                          <td>{item.route}</td>
+                          <td>{item.taskType}</td>
+                          <td>{item.modelName}</td>
+                          <td>{item.containsPii ? "是" : "否"}</td>
+                          <td>{item.tokensInput}/{item.tokensOutput}</td>
+                          <td>{item.latencyMs}ms</td>
+                          <td>{item.costUsd}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                  {(usage?.recent ?? []).length === 0 ? (
+                    <div className="sub" style={{ padding: "12px 0" }}>
+                      当前还没有模型调用记录。
+                    </div>
+                  ) : null}
+                </div>
+              </>
+            ) : (
+              <div
+                className="card"
+                style={{
+                  padding: "12px 14px",
+                  background: "var(--surface-2)",
+                  borderStyle: "dashed",
+                }}
+              >
+                只有 Owner / Admin 可以查看模型用量和成本信息。
+              </div>
+            )}
+          </div>
+
           <div className="card set-block" id="roles">
             <div className="head-row" style={{ marginBottom: 10 }}>
               <div>
@@ -899,6 +1265,8 @@ export function SettingsClient() {
               `membership_role_updated` / `membership_status_updated`
               <br />
               运维脚本：`npm run ops:backup-local` / `npm run ops:restore-local` / `npm run ops:check-secrets`
+              <br />
+              当前治理入口：`/notifications` / `/publish-checklist` / `/settings`
             </div>
           </div>
         </div>

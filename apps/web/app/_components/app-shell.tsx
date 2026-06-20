@@ -18,7 +18,7 @@ type NavItem = {
   href: string;
   label: string;
   icon: React.ReactNode;
-  badgeKey?: "leads" | "reply";
+  badgeKey?: "notifications";
 };
 
 type NavGroup = {
@@ -87,7 +87,6 @@ const NAV_GROUPS: NavGroup[] = [
       {
         href: "/hitl",
         label: "AI 首响审批",
-        badgeKey: "reply",
         icon: icon(<path d="M4 4h16v12H5.2L4 18z" />),
       },
     ],
@@ -96,8 +95,33 @@ const NAV_GROUPS: NavGroup[] = [
     label: "治理",
     items: [
       {
+        href: "/notifications",
+        label: "通知中心",
+        badgeKey: "notifications",
+        icon: icon(
+          <>
+            <path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9" />
+            <path d="M13.7 21a2 2 0 0 1-3.4 0" />
+          </>,
+        ),
+      },
+      {
+        href: "/publish-checklist",
+        label: "发布清单",
+        icon: icon(
+          <>
+            <path d="M9 6h11" />
+            <path d="M9 12h11" />
+            <path d="M9 18h11" />
+            <path d="m4 6 1.5 1.5L7.5 5" />
+            <path d="m4 12 1.5 1.5L7.5 11" />
+            <path d="m4 18 1.5 1.5L7.5 17" />
+          </>,
+        ),
+      },
+      {
         href: "/settings",
-        label: "合规 / 权限",
+        label: "设置 / 治理",
         icon: icon(
           <>
             <path d="M12 2 4 6v6c0 5 3.5 8 8 10 4.5-2 8-5 8-10V6z" />
@@ -116,7 +140,9 @@ const TITLE_BY_PREFIX: Array<[string, string]> = [
   ["/content-packs", "内容包"],
   ["/crm", "CRM 管道"],
   ["/hitl", "人工把关 · 审批中心"],
-  ["/settings", "合规与权限"],
+  ["/notifications", "通知中心"],
+  ["/publish-checklist", "发布清单"],
+  ["/settings", "设置 / 治理"],
 ];
 
 function resolveTitle(pathname: string) {
@@ -219,7 +245,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               {group.label ? <div className="nav-label">{group.label}</div> : null}
               {group.items.map((item) => {
                 const badge =
-                  item.badgeKey === "reply" && unread > 0 ? unread : undefined;
+                  item.badgeKey === "notifications" && unread > 0 ? unread : undefined;
                 return (
                   <Link
                     key={item.href}
@@ -301,6 +327,16 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                       </div>
                     </div>
                   ) : null}
+                  <Link
+                    href="/notifications"
+                    className="ni"
+                    onClick={() => setNotifOpen(false)}
+                  >
+                    <div className="grow">
+                      <div className="nt">查看全部通知</div>
+                      <div className="ns">进入通知中心查看完整待办与审计提示。</div>
+                    </div>
+                  </Link>
                 </div>
               ) : null}
             </div>

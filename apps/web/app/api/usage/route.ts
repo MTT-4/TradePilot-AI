@@ -47,8 +47,36 @@ export const GET = auth(async (request) => {
       }),
     ]);
 
+    const totalTokensInput = recent.reduce((sum, item) => sum + (item.tokensInput ?? 0), 0);
+    const totalTokensOutput = recent.reduce((sum, item) => sum + (item.tokensOutput ?? 0), 0);
+    const totalLatency = recent.reduce((sum, item) => sum + (item.latencyMs ?? 0), 0);
+    const totalCostUsd = recent.reduce(
+      (sum, item) => sum + Number(item.costUsd?.toString() ?? "0"),
+      0,
+    );
+    const piiInvocationCount = recent.filter((item) => item.containsPii).length;
+    const routeBreakdown = Object.entries(
+      recent.reduce<Record<string, number>>((acc, item) => {
+        const key = item.route.toLowerCase();
+        acc[key] = (acc[key] ?? 0) + 1;
+        return acc;
+      }, {}),
+    ).map(([route, count]) => ({
+      route,
+      count,
+    }));
+
     return Response.json({
       creditsBalance: toDecimalString(balanceAggregate._sum.deltaCredits),
+      summary: {
+        recentInvocationCount: recent.length,
+        piiInvocationCount,
+        totalTokensInput,
+        totalTokensOutput,
+        averageLatencyMs: recent.length > 0 ? Math.round(totalLatency / recent.length) : 0,
+        totalCostUsd: totalCostUsd.toFixed(4),
+        routeBreakdown,
+      },
       recent: recent.map((item) => ({
         id: item.id,
         route: item.route.toLowerCase(),

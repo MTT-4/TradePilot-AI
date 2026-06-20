@@ -80,6 +80,18 @@ a8b03ea fix: harden ci and settings operations
 2. 在内容包 / 发布清单页展示"建议投放时段 + 节假日提醒"，并把建议时间预填到发布清单的"计划时间"。
 3. 节假日为起步数据、需按年核对；可在 `/settings` 增加运营维护各国节假日的入口（后续可选）。
 
+### 4.3 新需求：自动扫描本地已下载模型，供设置页选择
+
+纯逻辑核心**已完成**：`apps/web/server/model-gateway/local-models.ts`
+（`scanLocalModels(baseDir, {maxDepth})` 扫描 `.gguf`、按文件名分类 chat/embedding、给出建议别名，
+缺目录返回 []；含 t8.2 单测）。待接线：
+
+1. 在 `lib/env.ts` 增加可选 `LOCAL_MODELS_DIR`（默认 README 约定目录，如 `~/AI/models`），并补进 `.env.example`。
+2. 新增 `GET /api/settings/local-models`（ADMIN 鉴权）：调用 `scanLocalModels(env.LOCAL_MODELS_DIR)` 返回模型列表。
+3. 在 `/settings` 的"模型策略"表单：加"扫描本地模型"按钮 + 下拉，把所选 chat 模型写入 `localQwenModel`、
+   embedding 模型写入 `localBgeModel`（沿用 `server/settings/service.ts` 的 `modelPolicySchema`/`upsertModelPolicy`）。
+4. 注意：扫描只读本机文件、要服务端执行；不要把绝对路径暴露给非管理员。
+
 ## 5. 开发约定
 
 - 复用 `globals.css` 的组件类，避免重复造样式；新增通用样式也加到 globals.css。

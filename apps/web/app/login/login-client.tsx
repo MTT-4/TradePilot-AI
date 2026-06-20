@@ -5,6 +5,8 @@ import { FormEvent, useEffect, useMemo, useState } from "react";
 import { fetchCurrentMe } from "@/app/_lib/auth-client";
 
 type LoginResponse = {
+  status: "ok";
+} | {
   status: "2fa_required";
   challengeId: string;
 };
@@ -96,7 +98,17 @@ export function LoginClient() {
         throw new Error(getApiErrorMessage(payload) ?? "登录失败。");
       }
 
-      setChallengeId((payload as LoginResponse).challengeId);
+      if (!payload || !("status" in payload)) {
+        throw new Error("登录失败。");
+      }
+
+      if (payload.status === "ok") {
+        router.replace(nextPath);
+        router.refresh();
+        return;
+      }
+
+      setChallengeId(payload.challengeId);
       setCode("");
     } catch (submitError) {
       setError(submitError instanceof Error ? submitError.message : "登录失败。");

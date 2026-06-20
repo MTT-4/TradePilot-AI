@@ -32,6 +32,17 @@ type TwoFactorInput = {
   code: string;
 };
 
+type PasswordLoginResult =
+  | {
+      status: "ok";
+      userId: string;
+      email: string;
+    }
+  | {
+      status: "2fa_required";
+      challengeId: string;
+    };
+
 function normalizeEmail(email: string) {
   return email.trim().toLowerCase();
 }
@@ -136,7 +147,10 @@ export async function registerUser({ email, password, name }: RegisterInput) {
   };
 }
 
-export async function beginLogin({ email, password }: LoginInput) {
+export async function beginLogin({
+  email,
+  password,
+}: LoginInput): Promise<PasswordLoginResult> {
   const prisma = getPrismaClient();
   const normalizedEmail = normalizeEmail(email);
   const user = await prisma.user.findUnique({
@@ -163,11 +177,11 @@ export async function beginLogin({ email, password }: LoginInput) {
   }
 
   if (!user.twoFactorEnabled || !user.totpSecret) {
-    throw new ApiError(
-      409,
-      "UNPROCESSABLE",
-      "Two-factor authentication is not configured for this account.",
-    );
+    return {
+      status: "ok",
+      userId: user.id,
+      email: user.email,
+    };
   }
 
   return {

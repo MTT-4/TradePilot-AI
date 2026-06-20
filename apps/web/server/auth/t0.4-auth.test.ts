@@ -91,6 +91,9 @@ describe("T0.4 auth and RBAC", () => {
     });
 
     expect(login.status).toBe("2fa_required");
+    if (login.status !== "2fa_required") {
+      throw new Error("Expected seeded user login to require 2FA.");
+    }
 
     const loginVerification = await verifyTwoFactorCode({
       challengeId: login.challengeId,

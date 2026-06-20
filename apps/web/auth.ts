@@ -46,11 +46,10 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
             id: true,
             email: true,
             name: true,
-            twoFactorEnabled: true,
           },
         });
 
-        if (!user || !user.twoFactorEnabled) {
+        if (!user) {
           return null;
         }
 

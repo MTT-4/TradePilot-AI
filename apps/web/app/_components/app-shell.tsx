@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import { fetchCurrentMe, type MeResponse } from "@/app/_lib/auth-client";
 
@@ -165,7 +165,31 @@ function isActive(pathname: string, href: string) {
 
 export function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname() ?? "/";
+  const router = useRouter();
   const bare = ROUTES_WITHOUT_SHELL.some((prefix) => pathname.startsWith(prefix));
+  const [tabs, setTabs] = useState<Array<{ href: string; title: string }>>([]);
+
+  useEffect(() => {
+    if (bare) {
+      return;
+    }
+    const title = resolveTitle(pathname);
+    // 把访问过的页面累积为可切换标签；已存在则不重复加
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setTabs((prev) =>
+      prev.some((tab) => tab.href === pathname)
+        ? prev
+        : [...prev, { href: pathname, title }],
+    );
+  }, [pathname, bare]);
+
+  function closeTab(href: string) {
+    const next = tabs.filter((tab) => tab.href !== href);
+    setTabs(next);
+    if (href === pathname) {
+      router.push(next[next.length - 1]?.href ?? "/");
+    }
+  }
 
   const [me, setMe] = useState<MeResponse | null>(null);
   const [notifications, setNotifications] = useState<NotificationItem[]>([]);
@@ -396,6 +420,29 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             </div>
           </div>
         </header>
+
+        {tabs.length > 0 ? (
+          <div className="tabbar">
+            {tabs.map((tab) => (
+              <div
+                key={tab.href}
+                className={`tab ${tab.href === pathname ? "on" : ""}`}
+                onClick={() => router.push(tab.href)}
+              >
+                <span className="label">{tab.title}</span>
+                <span
+                  className="x"
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    closeTab(tab.href);
+                  }}
+                >
+                  ×
+                </span>
+              </div>
+            ))}
+          </div>
+        ) : null}
 
         <div className="content fade-in">{children}</div>
       </div>

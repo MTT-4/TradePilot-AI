@@ -244,15 +244,15 @@ function readScopeText(scope: Record<string, unknown> | null) {
 function formatMemberRole(role: string) {
   switch (role) {
     case "owner":
-      return "Owner";
+      return "所有者";
     case "admin":
-      return "Admin";
+      return "管理员";
     case "operator":
-      return "Operator";
+      return "运营";
     case "sales":
-      return "Sales";
+      return "销售";
     case "viewer":
-      return "Viewer";
+      return "只读";
     default:
       return role;
   }
@@ -807,7 +807,7 @@ export function SettingsClient() {
                 <div className="sub">Owner / Admin 可登记导出或删除请求，并对处理结果留痕。</div>
               </div>
               <span className={`badge ${canManageCompliance ? "good" : "line"}`}>
-                当前角色：{currentMembership?.role ?? "未知"}
+                当前角色：{currentMembership ? formatMemberRole(currentMembership.role) : "未知"}
               </span>
             </div>
 
@@ -884,7 +884,7 @@ export function SettingsClient() {
                   marginBottom: 14,
                 }}
               >
-                你当前是 `{currentMembership?.role ?? "unknown"}` 角色，只能查看权限矩阵，不能创建或处理数据请求。
+                你当前是「{currentMembership ? formatMemberRole(currentMembership.role) : "未知"}」角色，只能查看权限矩阵，不能创建或处理数据请求。
               </div>
             )}
 
@@ -985,10 +985,10 @@ export function SettingsClient() {
                         )
                       }
                     >
-                      <option value="viewer">Viewer</option>
-                      <option value="sales">Sales</option>
-                      <option value="operator">Operator</option>
-                      <option value="admin">Admin</option>
+                      <option value="viewer">只读</option>
+                      <option value="sales">销售</option>
+                      <option value="operator">运营</option>
+                      <option value="admin">管理员</option>
                     </select>
                   </div>
                   <button
@@ -1037,10 +1037,10 @@ export function SettingsClient() {
                                     }
                                     disabled={membersSubmitting}
                                   >
-                                    <option value="viewer">Viewer</option>
-                                    <option value="sales">Sales</option>
-                                    <option value="operator">Operator</option>
-                                    <option value="admin">Admin</option>
+                                    <option value="viewer">只读</option>
+                                    <option value="sales">销售</option>
+                                    <option value="operator">运营</option>
+                                    <option value="admin">管理员</option>
                                   </select>
                                   <select
                                     className="btn ghost sm"
@@ -1168,7 +1168,7 @@ export function SettingsClient() {
                         />
                       </div>
                       <div className="field" style={{ marginBottom: 0 }}>
-                        <label>Logo URL</label>
+                        <label>Logo 链接</label>
                         <input
                           type="url"
                           value={brandForm.logoUrl}
@@ -1469,13 +1469,13 @@ export function SettingsClient() {
                     <thead>
                       <tr>
                         <th>时间</th>
-                        <th>Route</th>
-                        <th>Task</th>
-                        <th>Model</th>
-                        <th>PII</th>
-                        <th>Tokens</th>
-                        <th>Latency</th>
-                        <th>Cost</th>
+                        <th>路由</th>
+                        <th>任务</th>
+                        <th>模型</th>
+                        <th>隐私</th>
+                        <th>Token</th>
+                        <th>延迟</th>
+                        <th>费用</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -1528,11 +1528,11 @@ export function SettingsClient() {
               <thead>
                 <tr>
                   <th>动作</th>
-                  <th>Owner</th>
-                  <th>Admin</th>
-                  <th>Operator</th>
-                  <th>Sales</th>
-                  <th>Viewer</th>
+                  <th>所有者</th>
+                  <th>管理员</th>
+                  <th>运营</th>
+                  <th>销售</th>
+                  <th>只读</th>
                 </tr>
               </thead>
               <tbody>

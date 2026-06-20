@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { roleLabel, statusLabel } from "@/app/_lib/labels";
 import {
   fetchCurrentMe,
   LoginRequiredError,
@@ -262,7 +263,7 @@ export function SiteChatClient({ siteId }: { siteId: string }) {
     <>
       <div className="head-row" style={{ marginBottom: 18 }}>
         <div>
-          <div className="eyebrow">AI Site Builder</div>
+          <div className="eyebrow">AI 建站</div>
           <h2 className="sec" style={{ marginTop: 4 }}>
             {detail?.project.name ?? "站点草稿"}
           </h2>
@@ -319,7 +320,7 @@ export function SiteChatClient({ siteId }: { siteId: string }) {
               <b>建站专家</b>
               <br />
               <span>
-                {currentMembership ? `当前角色：${currentMembership.role}` : "加载角色中"} · public KB only
+                {currentMembership ? `当前角色：${roleLabel(currentMembership.role)}` : "加载角色中"} · 仅取可公开知识
               </span>
             </div>
           </div>
@@ -403,7 +404,7 @@ export function SiteChatClient({ siteId }: { siteId: string }) {
             <>
               <div className={`pv-body ${currentLocale.direction === "rtl" ? "pv-rtl" : ""}`}>
                 <div className="badge line" style={{ marginBottom: 12 }}>
-                  {currentLocale.publishStatus}
+                  {statusLabel(currentLocale.publishStatus)}
                 </div>
                 <div className="pv-hero">{currentLocale.translatedContent.headline}</div>
                 <div className="pv-sub">{currentLocale.translatedContent.subheadline}</div>

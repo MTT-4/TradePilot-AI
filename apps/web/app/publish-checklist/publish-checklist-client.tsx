@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
+import { statusLabel } from "@/app/_lib/labels";
 import {
   canApproveTask,
   formatTaskDetail,
@@ -323,7 +324,7 @@ export function PublishChecklistClient() {
               </div>
               <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 8 }}>
                 <span className={`st ${site.status === "published" ? "published" : "pending"}`}>
-                  {site.status}
+                  {statusLabel(site.status)}
                 </span>
                 {site.locales.some((locale) => locale.publishStatus !== "published") ? (
                   <span className="badge manual">存在未发布 locale</span>
@@ -377,7 +378,7 @@ export function PublishChecklistClient() {
                 {item.contentPackTitle}
               </div>
               <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 8 }}>
-                <span className={`st ${item.publishStatus}`}>{item.publishStatus}</span>
+                <span className={`st ${item.publishStatus}`}>{statusLabel(item.publishStatus)}</span>
                 {item.publishRequestPending || contentTaskIds.has(item.id) ? (
                   <span className="badge local">发布审批中</span>
                 ) : null}

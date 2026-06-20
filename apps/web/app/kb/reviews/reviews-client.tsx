@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { roleLabel, statusLabel } from "@/app/_lib/labels";
 import {
   fetchCurrentMe,
   LoginRequiredError,
@@ -269,7 +270,7 @@ export function ReviewsClient() {
             >
               {me.memberships.map((membership) => (
                 <option key={membership.tenantId} value={membership.tenantId}>
-                  {membership.tenantName} · {membership.role}
+                  {membership.tenantName} · {roleLabel(membership.role)}
                 </option>
               ))}
             </select>
@@ -346,7 +347,7 @@ export function ReviewsClient() {
               <div className="head-row" style={{ marginBottom: 10 }}>
                 <div style={{ minWidth: 0 }}>
                   <div style={{ display: "flex", gap: 7, flexWrap: "wrap", marginBottom: 6 }}>
-                    <span className={`st ${item.status}`}>{item.status}</span>
+                    <span className={`st ${item.status}`}>{statusLabel(item.status)}</span>
                     <span
                       className={`badge ${item.sensitivity === "internal_only" ? "local" : "line"}`}
                     >

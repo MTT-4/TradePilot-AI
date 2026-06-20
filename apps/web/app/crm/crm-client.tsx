@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { statusLabel } from "@/app/_lib/labels";
 import {
   fetchCurrentMe,
   LoginRequiredError,
@@ -299,7 +300,7 @@ export function CrmClient() {
                   ) : null}
                 </td>
                 <td>
-                  <span className={`st ${lead.status}`}>{lead.status}</span>
+                  <span className={`st ${lead.status}`}>{statusLabel(lead.status)}</span>
                 </td>
               </tr>
             ))}

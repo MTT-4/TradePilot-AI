@@ -2,6 +2,7 @@
 
 import Image from "next/image";
 import { useEffect, useMemo, useState } from "react";
+import { statusLabel } from "@/app/_lib/labels";
 
 type MeResponse = {
   currentTenant: {
@@ -504,7 +505,7 @@ export function ContentPackChatClient({ packId }: { packId: string }) {
             {pack?.pack.title}
           </h2>
           <div className="sub" style={{ marginTop: 4 }}>
-            租户：{tenantName} · 选题：{pack?.pack.topic} · 市场：{pack?.pack.market ?? "Global"} · 状态：{pack?.pack.status}
+            租户：{tenantName} · 选题：{pack?.pack.topic} · 市场：{pack?.pack.market ?? "全球"} · 状态：{statusLabel(pack?.pack.status)}
           </div>
         </div>
         <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
@@ -633,7 +634,7 @@ export function ContentPackChatClient({ packId }: { packId: string }) {
                         </div>
                       </div>
                       <span className={`st ${formatPublishStatus(item.publishStatus)}`}>
-                        {item.publishStatus}
+                        {statusLabel(item.publishStatus)}
                       </span>
                     </div>
 

@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
+import { statusLabel } from "@/app/_lib/labels";
 import { HitlAction } from "@/app/_components/hitl-action";
 import {
   fetchCurrentMe,
@@ -215,7 +216,7 @@ export function DesignClient() {
             <div className="pk-body">
               <div className="pk-spec">{item.contentPackTitle}</div>
               <div style={{ marginBottom: 8 }}>
-                <span className={`st ${item.publishStatus}`}>{item.publishStatus}</span>
+                <span className={`st ${item.publishStatus}`}>{statusLabel(item.publishStatus)}</span>
                 {item.publishRequestPending ? (
                   <span className="badge local" style={{ marginLeft: 6 }}>审批中</span>
                 ) : null}

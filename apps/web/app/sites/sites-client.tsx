@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { autofillKindLabel, statusLabel } from "@/app/_lib/labels";
 import { HitlAction } from "@/app/_components/hitl-action";
 import {
   fetchCurrentMe,
@@ -410,7 +411,7 @@ export function SitesClient() {
                   </div>
                 ) : null}
               </div>
-              <span className={`st ${site.status}`}>{site.status}</span>
+              <span className={`st ${site.status}`}>{statusLabel(site.status)}</span>
               {site.id === selectedSiteId ? <span className="badge good">当前</span> : null}
             </div>
           ))}
@@ -478,7 +479,7 @@ export function SitesClient() {
 
                 <div className="stat-strip" style={{ gridTemplateColumns: "1fr 1fr", marginBottom: 0 }}>
                   <div className="stat">
-                    <div className="v" style={{ fontSize: 16 }}>{selectedSite.status}</div>
+                    <div className="v" style={{ fontSize: 16 }}>{statusLabel(selectedSite.status)}</div>
                     <div className="l">状态</div>
                   </div>
                   <div className="stat">
@@ -572,9 +573,9 @@ export function SitesClient() {
                 style={{ borderTop: "1px solid var(--line-2)", paddingTop: 12, marginTop: 12 }}
               >
                 <div style={{ display: "flex", gap: 7, flexWrap: "wrap", marginBottom: 8 }}>
-                  <span className="badge line">{candidate.kind}</span>
+                  <span className="badge line">{autofillKindLabel(candidate.kind)}</span>
                   <span className={`st ${candidate.status === "applied" ? "published" : "pending"}`}>
-                    {candidate.status}
+                    {statusLabel(candidate.status)}
                   </span>
                 </div>
                 <div style={{ fontWeight: 600, fontSize: 13.5 }}>{candidate.title}</div>

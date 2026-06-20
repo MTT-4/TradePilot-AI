@@ -143,6 +143,9 @@ export function SitesClient() {
   const [error, setError] = useState<string | null>(null);
   const [showCreate, setShowCreate] = useState(false);
   const [creating, setCreating] = useState(false);
+  const [detailTab, setDetailTab] = useState<"approvals" | "versions" | "autofill">(
+    "approvals",
+  );
   const [createForm, setCreateForm] = useState({
     market: "",
     product: "",
@@ -502,7 +505,17 @@ export function SitesClient() {
             <div
               className="row-card"
               key={site.id}
-              style={{ cursor: "pointer" }}
+              style={{
+                cursor: "pointer",
+                borderLeft:
+                  site.id === selectedSiteId
+                    ? "3px solid var(--teal)"
+                    : "3px solid transparent",
+                background: site.id === selectedSiteId ? "var(--teal-tint)" : undefined,
+                borderRadius: 10,
+                paddingLeft: 10,
+                paddingRight: 10,
+              }}
               onClick={() => setSelectedSiteId(site.id)}
             >
               <div className="grow">
@@ -523,7 +536,6 @@ export function SitesClient() {
                 ) : null}
               </div>
               <span className={`st ${site.status}`}>{statusLabel(site.status)}</span>
-              {site.id === selectedSiteId ? <span className="badge good">当前</span> : null}
             </div>
           ))}
           {!sites.length ? (
@@ -602,79 +614,93 @@ export function SitesClient() {
             ) : null}
           </div>
 
-          <div className="card" style={{ padding: "18px 20px" }}>
-            <div className="head-row" style={{ marginBottom: 8 }}>
-              <h3 style={{ fontSize: 15 }}>审批队列</h3>
-              <span className="badge manual">{relatedHitl.length} 条</span>
+          {selectedSite ? (
+          <div className="card" style={{ padding: "14px 20px" }}>
+            <div className="langtab" style={{ marginLeft: 0, marginBottom: 14, gap: 6, flexWrap: "wrap" }}>
+              <b
+                className={detailTab === "approvals" ? "on" : ""}
+                onClick={() => setDetailTab("approvals")}
+              >
+                审批队列 {relatedHitl.length}
+              </b>
+              <b
+                className={detailTab === "versions" ? "on" : ""}
+                onClick={() => setDetailTab("versions")}
+              >
+                版本回滚 {detail?.versionHistory.length ?? 0}
+              </b>
+              <b
+                className={detailTab === "autofill" ? "on" : ""}
+                onClick={() => setDetailTab("autofill")}
+              >
+                AI 补全 {detail?.version?.autofillCandidates.length ?? 0}
+              </b>
             </div>
-            {relatedHitl.map((task) => (
-              <div className="hitl-item" key={task.id}>
-                <div className="ic teal">
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
-                    <rect x="3" y="4" width="18" height="14" rx="2" />
-                  </svg>
-                </div>
-                <div className="grow">
-                  <div className="t">{formatTaskType(task.type)}</div>
-                  <div className="m">
-                    {task.payload.mode === "autofill_candidate" ? "自动补全确认上线" : "站点上线"} ·{" "}
-                    {formatTime(task.createdAt)}
+
+            {detailTab === "approvals" ? (
+              <div>
+                {relatedHitl.map((task) => (
+                  <div className="hitl-item" key={task.id}>
+                    <div className="ic teal">
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
+                        <rect x="3" y="4" width="18" height="14" rx="2" />
+                      </svg>
+                    </div>
+                    <div className="grow">
+                      <div className="t">{formatTaskType(task.type)}</div>
+                      <div className="m">
+                        {task.payload.mode === "autofill_candidate" ? "自动补全确认上线" : "站点上线"} ·{" "}
+                        {formatTime(task.createdAt)}
+                      </div>
+                    </div>
+                    {canApprove(currentMembership?.role) ? (
+                      <HitlAction
+                        tenantId={selectedTenantId}
+                        endpoint={`/api/hitl/${task.id}/approve`}
+                        idleLabel="批准"
+                        busyLabel="审批中…"
+                        onError={(message) => setError(message || null)}
+                        onSuccess={() => refreshCurrent()}
+                      />
+                    ) : (
+                      <span className="badge line">等待管理员</span>
+                    )}
                   </div>
-                </div>
-                {canApprove(currentMembership?.role) ? (
-                  <HitlAction
-                    tenantId={selectedTenantId}
-                    endpoint={`/api/hitl/${task.id}/approve`}
-                    idleLabel="批准"
-                    busyLabel="审批中…"
-                    onError={(message) => setError(message || null)}
-                    onSuccess={() => refreshCurrent()}
-                  />
-                ) : (
-                  <span className="badge line">等待管理员</span>
-                )}
+                ))}
+                {!relatedHitl.length ? (
+                  <div className="sub" style={{ padding: "10px 0" }}>当前站点没有待审批的发布任务。</div>
+                ) : null}
               </div>
-            ))}
-            {!relatedHitl.length ? (
-              <div className="sub" style={{ padding: "10px 0" }}>当前站点没有待审批的发布任务。</div>
             ) : null}
-          </div>
 
-          <div className="card" style={{ padding: "18px 20px" }}>
-            <div className="head-row" style={{ marginBottom: 8 }}>
-              <h3 style={{ fontSize: 15 }}>版本回滚</h3>
-              <span className="badge line">{detail?.versionHistory.length ?? 0} 个版本</span>
-            </div>
-            {detail?.versionHistory.map((version) => (
-              <div className="row-card" key={version.id}>
-                <div className="grow">
-                  <div className="nm">v{version.versionNumber}</div>
-                  <div className="sub" style={{ marginTop: 2 }}>
-                    {version.note ?? "无备注"} · {formatTime(version.createdAt)}
+            {detailTab === "versions" ? (
+              <div>
+                {detail?.versionHistory.map((version) => (
+                  <div className="row-card" key={version.id}>
+                    <div className="grow">
+                      <div className="nm">v{version.versionNumber}</div>
+                      <div className="sub" style={{ marginTop: 2 }}>
+                        {version.note ?? "无备注"} · {formatTime(version.createdAt)}
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      className="btn ghost sm"
+                      disabled={!selectedSiteId || !canEdit(currentMembership?.role) || busyKey === `rollback-${version.id}`}
+                      onClick={() => void postJson(`/api/sites/${selectedSiteId}/rollback`, { versionId: version.id }, `rollback-${version.id}`)}
+                    >
+                      {busyKey === `rollback-${version.id}` ? "回滚中…" : "回滚到此版本"}
+                    </button>
                   </div>
-                </div>
-                <button
-                  type="button"
-                  className="btn ghost sm"
-                  disabled={!selectedSiteId || !canEdit(currentMembership?.role) || busyKey === `rollback-${version.id}`}
-                  onClick={() => void postJson(`/api/sites/${selectedSiteId}/rollback`, { versionId: version.id }, `rollback-${version.id}`)}
-                >
-                  {busyKey === `rollback-${version.id}` ? "回滚中…" : "回滚到此版本"}
-                </button>
+                ))}
+                {!(detail?.versionHistory.length) ? (
+                  <div className="sub" style={{ padding: "10px 0" }}>暂无历史版本。</div>
+                ) : null}
               </div>
-            ))}
-          </div>
+            ) : null}
 
-          <div className="card fixes">
-            <div className="head-row" style={{ marginBottom: 6 }}>
-              <div style={{ display: "flex", alignItems: "center", gap: 9 }}>
-                <svg viewBox="0 0 24 24" fill="none" stroke="var(--teal)" strokeWidth={2} style={{ width: 18, height: 18 }}>
-                  <path d="M12 3l2.4 5.4L20 9l-4 4 1 6-5-3-5 3 1-6-4-4 5.6-.6z" />
-                </svg>
-                <h3 style={{ fontSize: 15 }}>AI 按知识库自动补全内容</h3>
-              </div>
-              <span className="badge manual">{detail?.version?.autofillCandidates.length ?? 0} 条</span>
-            </div>
+            {detailTab === "autofill" ? (
+            <div>
             <div className="sub" style={{ marginBottom: 8 }}>
               新产品 / 认证 / 博客由 AI 依知识库生成草稿，每条要你确认或调整后上线。
             </div>
@@ -743,7 +769,10 @@ export function SitesClient() {
                 还没有自动补全候选，先点击「生成自动补全候选」。
               </div>
             ) : null}
+            </div>
+            ) : null}
           </div>
+          ) : null}
         </div>
       </div>
     </>

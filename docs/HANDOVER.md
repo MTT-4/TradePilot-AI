@@ -6,10 +6,12 @@
 ## 1. 最近改动（已提交到 `main`）
 
 ```
-213c2bf chore(seed): 给演示用户设置真实 bcrypt 密码哈希
-b3c322c feat(ui): 按高保真原型改版 login/kb/sites/design/crm/hitl
-3396713 feat(ui): 接入原型设计系统 + 侧边栏框架(AppShell) + 工作台
-226b4e9 fix: 修复无语言站点列表崩溃 + 补充模型网关环境变量文档
+f94f11c ci: upgrade github actions runtimes
+dcea1f9 test: stabilize t6.4 acceptance fixture
+a8b03ea fix: harden ci and settings operations
+0aac4c3 feat: add compliance console and rbac coverage
+530d747 feat: restyle content pack chat workspace
+91788c2 feat: restyle site chat workspace
 ```
 
 ## 2. 开始前请先做
@@ -17,8 +19,8 @@ b3c322c feat(ui): 按高保真原型改版 login/kb/sites/design/crm/hitl
 1. 确认同步：`git log --oneline -5` 应能看到以上提交；`git status` 应为干净。
 2. 如遇 `.git/index.lock` 报错：`rm -f .git/index.lock`；再 `rm -rf apps/web/tmp`（构建临时产物，已被 gitignore）。
 3. `npm install` 重装依赖（此前为在 Linux 沙箱跑测试，往 `node_modules` 加过原生二进制，重装即恢复干净）。
-4. 验证基线：`npm run lint` 与 `npm run typecheck` 必须通过（已确认通过）。
-   完整测试 `npm run test` 需先 `docker compose up -d` + `npm run prisma:migrate` + `npm run prisma:seed`。
+4. 验证基线：`npm run lint`、`npm run typecheck`、`npm run test` 当前均已通过。
+   如需本地完整复现，先 `docker compose up -d` + `npm run prisma:migrate` + `npm run prisma:seed`。
 
 ## 3. 已完成（不要重复做）
 
@@ -29,20 +31,26 @@ b3c322c feat(ui): 按高保真原型改版 login/kb/sites/design/crm/hitl
   `/login` 与 `/site/`（对外站点）会自动不套框架。导航高亮跟随路由，顶栏铃铛拉真实未读数。
 - **字体**：`layout.tsx` 用 next/font 接入 Space Grotesk / Inter / Space Mono，变量对应 globals.css 的 `--font-*`。
 - **已按原型改版的页面**：工作台 (`/`)、登录 (`/login`)、知识库 (`/kb/reviews`)、站点 (`/sites`)、
-  内容包 (`/design`)、CRM (`/crm`)、首响审批 (`/hitl`)。所有数据接线 / API 调用 / 权限判断均未改，只换外观。
+  内容包 (`/design`)、CRM (`/crm`)、首响审批 (`/hitl`)、站点对话编辑 (`/sites/[id]/chat`)、
+  内容包对话 (`/content-packs/[id]/chat`)、设置 (`/settings`)。所有数据接线 / API 调用 / 权限判断均未改，只换外观。
+- **权限与合规**：
+  - `/settings` 已接入成员管理与数据请求（导出 / 删除）控制台；
+  - `t7.1` RBAC 测试已补齐 owner/admin/operator/sales/viewer 的权限覆盖；
+  - `t7.2` 数据请求服务 / API / 测试已落地，保留审计链路。
+- **闭环验收与 CI**：
+  - `T6.4` 18 步闭环验收测试已稳定化，不再依赖脆弱 seed 内容包模板；
+  - GitHub Actions 现有 `quality` + `closed-loop` 两个 job，使用 `pgvector/pgvector:pg16`，并带 `ops:check-secrets` 检查；
+  - CI / `.nvmrc` / README 已统一到 Node 22 基线。
 - **演示账号**（在 `prisma/seed.ts`，需重新 `npm run prisma:seed` 生效）：
   - `owner-a@tradepilot.local` / `TradePilot@2026`（所有者 · 租户 A，未开 2FA，可直接登录）
   - 另有 `sales-a` / `owner-b` / `sales-b`，密码相同。上线前务必改密码并按需启用 2FA。
 
 ## 4. 待继续做（参照高保真原型）
 
-1. **尚未改版的页面**：
-   - 站点对话编辑 `apps/web/app/sites/[id]/chat/site-chat-client.tsx`
-   - 内容包对话 `apps/web/app/content-packs/[id]/chat/content-pack-chat-client.tsx`
-   - 建议用原型的 `.split` + `.chat`（chat-head / chat-body / msg / chips / chat-input）+ `.preview`（pv-bar / pv-body / langtab）样式。
-2. **原型里有、但项目暂无独立路由的模块**：发布清单、通知中心、设置（成员 / 品牌 / 模型 / 用量）。
+1. **原型里仍可继续补齐的独立模块**：发布清单、通知中心，以及设置下更细的品牌 / 模型 / 用量分区。
    按需新建路由并复用现有组件类（`tbl / mark / set-grid / set-nav / usebar` 等）。
-3. **对外站点页** `apps/web/app/site/[slug]/[locale]/page.tsx` 是客户访问的落地页，保持独立风格，不要套后台框架。
+2. **对外站点页** `apps/web/app/site/[slug]/[locale]/page.tsx` 是客户访问的落地页，保持独立风格，不要套后台框架。
+3. **如果要继续做平台升级**：下一轮可以评估 Node 22 之外的依赖升级，但先以当前 CI 全绿为基线，不要在同一提交里混入无关重构。
 
 ## 5. 开发约定
 

@@ -105,17 +105,13 @@ a8b03ea fix: harden ci and settings operations
    embedding 模型写入 `localBgeModel`（沿用 `server/settings/service.ts` 的 `modelPolicySchema`/`upsertModelPolicy`）。
 4. 注意：扫描只读本机文件、要服务端执行；不要把绝对路径暴露给非管理员。
 
-### 4.4 闭环缺口：AI 首响（本地 Qwen）审阅 / 编辑 / 发送界面（需 DB 环境）
+### 4.4 AI 首响审阅 / 编辑 / 发送 —— ✅ 已完成（端到端）
 
-现状（已部分完成）：起草入口已在 `/crm` 询盘处（"用 AI 起草首响" → `POST /api/replies/draft`）；
-`/replies` 审阅页**壳已建**（列 reply_send 任务、询盘↔草稿双栏、"确认并发送"走 `/api/hitl/[id]/approve`）。
-**仍缺后端**：获取/编辑草稿详情，导致 `/replies` 左右两栏只能显示占位、不能改文案。待做：
-
-1. 后端补「获取草稿详情」与「编辑草稿正文」接口（如 `GET /api/replies/[id]`、`PATCH /api/replies/[id]`），
-   只允许 sales 及以上、PENDING_APPROVAL 状态可改；隐私红线：草稿生成只走本地 Qwen。
-2. 把 `/replies` 壳的询盘正文 / 草稿接上真实数据并开放编辑保存（壳已就绪，复用 `.reply-grid/.inq/.draft/.cite`）。
-3. 起草入口：在询盘/线索处加"用 AI 起草首响"按钮 → `POST /api/replies/draft`。
-4. 侧栏可把"AI 首响审批"指向 `/replies`（目前指向 `/hitl`）。
+- 后端：`getReplyDetail` / `updateReplyDraft` / `rejectReplyDraft` + 路由 `GET/PATCH /api/replies/[id]`、
+  `POST /api/replies/[id]/reject`（sales+、PENDING_APPROVAL 可改；询盘机器翻译走本地 Qwen）。
+- 前端：`/crm`「用 AI 起草首响」→ `POST /api/replies/draft`；`/replies` 审阅页接真实详情
+  （询盘正文+机器译、草稿可编辑保存、拒绝、确认发送走 `/api/hitl/[id]/approve`）；侧栏已指向 `/replies`。
+- 仅剩可选优化：草稿"拒绝"后是否触发重新起草、引用知识点击溯源等，按需再做。
 
 ### 4.5 缺口：询盘 / 邮件 / 线索详情视图（需 DB 环境）
 

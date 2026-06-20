@@ -49,9 +49,56 @@ export function DesignClient() {
   const [items, setItems] = useState<DesignItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [showCreate, setShowCreate] = useState(false);
+  const [creating, setCreating] = useState(false);
+  const [createForm, setCreateForm] = useState({
+    topic: "",
+    market: "",
+    locales: "en,ar,ru",
+  });
 
   const currentMembership =
     me?.memberships.find((item) => item.tenantId === selectedTenantId) ?? null;
+
+  function canEditRole(role: string | undefined) {
+    return role === "owner" || role === "admin" || role === "operator";
+  }
+
+  async function createPack() {
+    if (!selectedTenantId) {
+      return;
+    }
+    const locales = createForm.locales
+      .split(",")
+      .map((value) => value.trim().toLowerCase())
+      .filter(Boolean);
+    setCreating(true);
+    setError(null);
+    try {
+      const response = await fetch("/api/content-packs/generate", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "X-Tenant-Id": selectedTenantId,
+        },
+        body: JSON.stringify({
+          topic: createForm.topic.trim(),
+          market: createForm.market.trim() || undefined,
+          locales: locales.length > 0 ? locales : ["en"],
+        }),
+      });
+      if (!response.ok) {
+        const payload = await response.json().catch(() => null);
+        throw new Error(payload?.error?.message ?? "新建内容包失败。");
+      }
+      setShowCreate(false);
+      await refreshQueue();
+    } catch (createError) {
+      setError(createError instanceof Error ? createError.message : "新建内容包失败。");
+    } finally {
+      setCreating(false);
+    }
+  }
 
   async function refreshQueue() {
     if (!selectedTenantId) {
@@ -142,23 +189,77 @@ export function DesignClient() {
             内容不再直接改成已发，先发起审批请求，再由 HITL 统一确认。
           </div>
         </div>
-        {me && me.memberships.length > 0 ? (
-          <select
-            className="btn ghost sm"
-            value={selectedTenantId}
-            onChange={(event) => {
-              setLoading(true);
-              setSelectedTenantId(event.target.value);
-            }}
+        <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+          <button
+            type="button"
+            className="btn primary sm"
+            disabled={!canEditRole(currentMembership?.role)}
+            onClick={() => setShowCreate((open) => !open)}
           >
-            {me.memberships.map((membership) => (
-              <option key={membership.tenantId} value={membership.tenantId}>
-                {membership.tenantName}
-              </option>
-            ))}
-          </select>
-        ) : null}
+            {showCreate ? "收起" : "新建内容包"}
+          </button>
+          {me && me.memberships.length > 0 ? (
+            <select
+              className="btn ghost sm"
+              value={selectedTenantId}
+              onChange={(event) => {
+                setLoading(true);
+                setSelectedTenantId(event.target.value);
+              }}
+            >
+              {me.memberships.map((membership) => (
+                <option key={membership.tenantId} value={membership.tenantId}>
+                  {membership.tenantName}
+                </option>
+              ))}
+            </select>
+          ) : null}
+        </div>
       </div>
+
+      {showCreate ? (
+        <div className="card" style={{ padding: "18px 20px", marginBottom: 18 }}>
+          <div className="head-row" style={{ marginBottom: 10 }}>
+            <h3 style={{ fontSize: 15 }}>发起新内容包（一个选题 → 多平台）</h3>
+          </div>
+          <div className="grid-2" style={{ gap: 12 }}>
+            <div className="field" style={{ marginBottom: 0 }}>
+              <label>选题</label>
+              <input
+                value={createForm.topic}
+                onChange={(e) => setCreateForm({ ...createForm, topic: e.target.value })}
+                placeholder="例如：空压机省 30% 电费"
+              />
+            </div>
+            <div className="field" style={{ marginBottom: 0 }}>
+              <label>目标市场（可选）</label>
+              <input
+                value={createForm.market}
+                onChange={(e) => setCreateForm({ ...createForm, market: e.target.value })}
+                placeholder="例如：中东"
+              />
+            </div>
+            <div className="field" style={{ marginBottom: 0 }}>
+              <label>语种（逗号分隔，可选 en/ar/ru/fr/de/pt）</label>
+              <input
+                value={createForm.locales}
+                onChange={(e) => setCreateForm({ ...createForm, locales: e.target.value })}
+                placeholder="en,ar,ru"
+              />
+            </div>
+          </div>
+          <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 12 }}>
+            <button
+              type="button"
+              className="btn primary sm"
+              disabled={creating || !createForm.topic.trim()}
+              onClick={() => void createPack()}
+            >
+              {creating ? "生成中…" : "生成内容包"}
+            </button>
+          </div>
+        </div>
+      ) : null}
 
       {error ? (
         <div

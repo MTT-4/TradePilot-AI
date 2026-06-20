@@ -141,6 +141,15 @@ export function SitesClient() {
   const [loading, setLoading] = useState(true);
   const [busyKey, setBusyKey] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [showCreate, setShowCreate] = useState(false);
+  const [creating, setCreating] = useState(false);
+  const [createForm, setCreateForm] = useState({
+    market: "",
+    product: "",
+    locales: "en,ar,ru",
+    style: "conversion focused",
+    cta: "Request a quote",
+  });
 
   const currentMembership =
     me?.memberships.find((item) => item.tenantId === selectedTenantId) ?? null;
@@ -334,6 +343,46 @@ export function SitesClient() {
     }
   }
 
+  async function createSite() {
+    if (!selectedTenantId) {
+      return;
+    }
+    const locales = createForm.locales
+      .split(",")
+      .map((value) => value.trim().toLowerCase())
+      .filter(Boolean);
+    setCreating(true);
+    setError(null);
+    try {
+      const response = await fetch("/api/sites/generate", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "X-Tenant-Id": selectedTenantId,
+        },
+        body: JSON.stringify({
+          brief: {
+            market: createForm.market.trim(),
+            product: createForm.product.trim(),
+            locales: locales.length > 0 ? locales : ["en"],
+            style: createForm.style.trim() || "conversion focused",
+            cta: createForm.cta.trim() || "Request a quote",
+          },
+        }),
+      });
+      if (!response.ok) {
+        const payload = await response.json().catch(() => null);
+        throw new Error(payload?.error?.message ?? "新建站点失败。");
+      }
+      setShowCreate(false);
+      await loadSitesAndHitl(selectedTenantId, currentMembership?.role);
+    } catch (createError) {
+      setError(createError instanceof Error ? createError.message : "新建站点失败。");
+    } finally {
+      setCreating(false);
+    }
+  }
+
   const selectedSite = sites.find((item) => item.id === selectedSiteId) ?? null;
   const relatedHitl = hitl.filter(
     (item) =>
@@ -354,20 +403,82 @@ export function SitesClient() {
             草稿不能直接对外，发布需经 HITL 审批通过后才会开放公开页。
           </div>
         </div>
-        {me && me.memberships.length > 0 ? (
-          <select
-            className="btn ghost sm"
-            value={selectedTenantId}
-            onChange={(event) => setSelectedTenantId(event.target.value)}
+        <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+          <button
+            type="button"
+            className="btn primary sm"
+            disabled={!canEdit(currentMembership?.role)}
+            onClick={() => setShowCreate((open) => !open)}
           >
-            {me.memberships.map((membership) => (
-              <option key={membership.tenantId} value={membership.tenantId}>
-                {membership.tenantName}
-              </option>
-            ))}
-          </select>
-        ) : null}
+            {showCreate ? "收起" : "新建站点"}
+          </button>
+          {me && me.memberships.length > 0 ? (
+            <select
+              className="btn ghost sm"
+              value={selectedTenantId}
+              onChange={(event) => setSelectedTenantId(event.target.value)}
+            >
+              {me.memberships.map((membership) => (
+                <option key={membership.tenantId} value={membership.tenantId}>
+                  {membership.tenantName}
+                </option>
+              ))}
+            </select>
+          ) : null}
+        </div>
       </div>
+
+      {showCreate ? (
+        <div className="card" style={{ padding: "18px 20px", marginBottom: 18 }}>
+          <div className="head-row" style={{ marginBottom: 10 }}>
+            <h3 style={{ fontSize: 15 }}>对话生成新站点</h3>
+          </div>
+          <div className="grid-2" style={{ gap: 12 }}>
+            <div className="field" style={{ marginBottom: 0 }}>
+              <label>目标市场</label>
+              <input
+                value={createForm.market}
+                onChange={(e) => setCreateForm({ ...createForm, market: e.target.value })}
+                placeholder="例如：中东 / MENA"
+              />
+            </div>
+            <div className="field" style={{ marginBottom: 0 }}>
+              <label>主推产品</label>
+              <input
+                value={createForm.product}
+                onChange={(e) => setCreateForm({ ...createForm, product: e.target.value })}
+                placeholder="例如：空压机 XV-75"
+              />
+            </div>
+            <div className="field" style={{ marginBottom: 0 }}>
+              <label>语种（逗号分隔，可选 en/ar/ru/fr/de/pt）</label>
+              <input
+                value={createForm.locales}
+                onChange={(e) => setCreateForm({ ...createForm, locales: e.target.value })}
+                placeholder="en,ar,ru"
+              />
+            </div>
+            <div className="field" style={{ marginBottom: 0 }}>
+              <label>主行动号召（CTA）</label>
+              <input
+                value={createForm.cta}
+                onChange={(e) => setCreateForm({ ...createForm, cta: e.target.value })}
+                placeholder="Request a quote"
+              />
+            </div>
+          </div>
+          <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 12 }}>
+            <button
+              type="button"
+              className="btn primary sm"
+              disabled={creating || !createForm.market.trim() || !createForm.product.trim()}
+              onClick={() => void createSite()}
+            >
+              {creating ? "生成中…" : "生成站点（进审批队列）"}
+            </button>
+          </div>
+        </div>
+      ) : null}
 
       {error ? (
         <div

@@ -85,6 +85,7 @@ export function CrmClient() {
   const [opportunities, setOpportunities] = useState<Opportunity[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [stageBusyId, setStageBusyId] = useState<string | null>(null);
 
   useEffect(() => {
     let active = true;
@@ -149,6 +150,35 @@ export function CrmClient() {
       active = false;
     };
   }, [selectedTenantId]);
+
+  async function changeStage(opportunityId: string, stage: string) {
+    if (!selectedTenantId) {
+      return;
+    }
+    setStageBusyId(opportunityId);
+    setError(null);
+    try {
+      const response = await fetch(`/api/crm/opportunities/${opportunityId}/stage`, {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+          "X-Tenant-Id": selectedTenantId,
+        },
+        body: JSON.stringify({ stage }),
+      });
+      if (!response.ok) {
+        const payload = await response.json().catch(() => null);
+        throw new Error(payload?.error?.message ?? "更新阶段失败。");
+      }
+      const refreshed = await fetchCrm(selectedTenantId);
+      setLeads(refreshed.leads);
+      setOpportunities(refreshed.opportunities);
+    } catch (changeError) {
+      setError(changeError instanceof Error ? changeError.message : "更新阶段失败。");
+    } finally {
+      setStageBusyId(null);
+    }
+  }
 
   const stageColumns = STAGES.map((stage) => ({
     ...stage,
@@ -244,6 +274,21 @@ export function CrmClient() {
                       ? `${opportunity.currency} ${opportunity.valueAmount}`
                       : "待报价"}
                   </div>
+                  <select
+                    className="btn ghost sm"
+                    style={{ marginTop: 8, width: "100%" }}
+                    value={STAGES.some((s) => s.key === opportunity.stage.toLowerCase())
+                      ? opportunity.stage.toLowerCase()
+                      : "new"}
+                    disabled={stageBusyId === opportunity.id}
+                    onChange={(event) => void changeStage(opportunity.id, event.target.value)}
+                  >
+                    {STAGES.map((s) => (
+                      <option key={s.key} value={s.key}>
+                        移至：{s.label}
+                      </option>
+                    ))}
+                  </select>
                 </div>
               ))}
             </div>

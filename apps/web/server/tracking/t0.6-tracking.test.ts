@@ -7,6 +7,7 @@ import {
   createTrackingLink,
   listTrackingLinks,
   resolveTrackingAttributionBySlug,
+  updateTrackingLink,
 } from "@/server/tracking/service";
 
 const prisma = getPrismaClient();
@@ -147,6 +148,71 @@ describe("T0.6 tracking service", () => {
     expect(listed).toBeTruthy();
     expect(listed?.resolvedUrl).toContain("utm_source=linkedin");
     expect(listed?.stats.clicksTotal).toBeGreaterThanOrEqual(0);
+  });
+
+  it("updates target URL and UTM params without changing tracking ownership", async () => {
+    const contentItem = await prisma.contentItem.create({
+      data: {
+        tenantId: tenantContextA.tenantId,
+        contentPackId,
+        ownerUserId: tenantContextA.userId,
+        platform: "FACEBOOK",
+        locale: "EN",
+        mediaType: "IMAGE",
+        title: "tracking edit content",
+        body: "Tracking service update probe",
+        spec: {
+          ratio: "1:1",
+        },
+        publishStatus: "PENDING",
+      },
+      select: {
+        id: true,
+      },
+    });
+
+    const trackingLink = await createTrackingLink(tenantContextA, {
+      contentItemId: contentItem.id,
+      targetUrl: "https://example.com/original",
+      utmSource: "facebook",
+      utmMedium: "social",
+      utmCampaign: "before-edit",
+      utmContent: "before",
+    });
+
+    const updated = await updateTrackingLink({
+      tenantContext: tenantContextA,
+      trackingLinkId: trackingLink.id,
+      input: {
+        targetUrl: "https://example.com/updated?ref=1",
+        utmSource: "meta",
+        utmCampaign: "after-edit",
+        utmContent: "",
+        botFilterEnabled: false,
+      },
+    });
+
+    expect(updated).toMatchObject({
+      id: trackingLink.id,
+      slug: trackingLink.slug,
+      contentItemId: contentItem.id,
+      targetUrl: "https://example.com/updated?ref=1",
+      utmSource: "meta",
+      utmMedium: "social",
+      utmCampaign: "after-edit",
+      utmContent: null,
+      botFilterEnabled: false,
+    });
+    expect(updated.resolvedUrl).toBe(
+      "https://example.com/updated?ref=1&utm_source=meta&utm_medium=social&utm_campaign=after-edit",
+    );
+
+    const listed = await listTrackingLinks(tenantContextA, { limit: 50 });
+    const listedItem = listed.items.find((item) => item.id === trackingLink.id);
+
+    expect(listedItem).toBeTruthy();
+    expect(listedItem?.resolvedUrl).toBe(updated.resolvedUrl);
+    expect(listedItem?.botFilterEnabled).toBe(false);
   });
 
   it("R3.1 writes click_event from the server-side tracking link and redirects", async () => {

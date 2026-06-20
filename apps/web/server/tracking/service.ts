@@ -8,16 +8,51 @@ import { getPrismaClient } from "@/server/db/prisma";
 import { getTenantPrisma } from "@/server/db/tenant-prisma";
 import type { TenantContext } from "@/server/db/tenant-context";
 
+function optionalTrimmedString(maxLength: number) {
+  return z.preprocess(
+    (value) => (typeof value === "string" ? value.trim() : value),
+    z.string().min(1).max(maxLength).optional(),
+  );
+}
+
+function optionalNullableTrimmedString(maxLength: number) {
+  return z.preprocess((value) => {
+    if (typeof value !== "string") {
+      return value;
+    }
+
+    const trimmed = value.trim();
+    return trimmed.length > 0 ? trimmed : null;
+  }, z.string().min(1).max(maxLength).nullable().optional());
+}
+
 const trackingLinkInputSchema = z.object({
   contentItemId: z.string().min(1),
   campaignId: z.string().min(1).optional(),
   targetUrl: z.string().url(),
-  utmSource: z.string().trim().min(1).max(80).optional(),
-  utmMedium: z.string().trim().min(1).max(80).optional(),
-  utmCampaign: z.string().trim().min(1).max(120).optional(),
-  utmContent: z.string().trim().min(1).max(120).optional().nullable(),
+  utmSource: optionalTrimmedString(80),
+  utmMedium: optionalTrimmedString(80),
+  utmCampaign: optionalTrimmedString(120),
+  utmContent: optionalNullableTrimmedString(120),
   botFilterEnabled: z.boolean().optional(),
 });
+
+export const updateTrackingLinkSchema = z
+  .object({
+    targetUrl: z.string().url().optional(),
+    utmSource: optionalTrimmedString(80),
+    utmMedium: optionalTrimmedString(80),
+    utmCampaign: optionalTrimmedString(120),
+    utmContent: optionalNullableTrimmedString(120),
+    botFilterEnabled: z.boolean().optional(),
+  })
+  .refine(
+    (input) =>
+      Object.values(input).some((value) => value !== undefined),
+    {
+      message: "At least one tracking link field is required.",
+    },
+  );
 
 const BOT_USER_AGENT_PATTERN =
   /(bot|crawler|spider|preview|slurp|headless|facebookexternalhit|whatsapp|telegram|linkedinbot|slackbot|discordbot)/i;
@@ -39,6 +74,7 @@ export type TrackingAttribution = {
 };
 
 type CreateTrackingLinkInput = z.infer<typeof trackingLinkInputSchema>;
+type UpdateTrackingLinkInput = z.infer<typeof updateTrackingLinkSchema>;
 
 type RecordClickEventInput = {
   slug: string;
@@ -289,6 +325,85 @@ export async function listTrackingLinks(
         latestClickAt: item.clickEvents[0]?.occurredAt.toISOString() ?? null,
       },
     })),
+  };
+}
+
+export async function updateTrackingLink(params: {
+  tenantContext: TenantContext;
+  trackingLinkId: string;
+  input: UpdateTrackingLinkInput;
+}) {
+  const prisma = getTenantPrisma(params.tenantContext);
+  const input = updateTrackingLinkSchema.parse(params.input);
+  const existing = await prisma.trackingLink.findUnique({
+    where: {
+      id: params.trackingLinkId,
+    },
+    select: {
+      id: true,
+    },
+  });
+
+  if (!existing) {
+    throw new ApiError(404, "NOT_FOUND", "Tracking link not found.");
+  }
+
+  const data: {
+    targetUrl?: string;
+    utmSource?: string;
+    utmMedium?: string;
+    utmCampaign?: string;
+    utmContent?: string | null;
+    botFilterEnabled?: boolean;
+  } = {};
+
+  if (input.targetUrl !== undefined) {
+    data.targetUrl = validateTargetUrl(input.targetUrl).toString();
+  }
+
+  if (input.utmSource !== undefined) {
+    data.utmSource = input.utmSource;
+  }
+
+  if (input.utmMedium !== undefined) {
+    data.utmMedium = input.utmMedium;
+  }
+
+  if (input.utmCampaign !== undefined) {
+    data.utmCampaign = input.utmCampaign;
+  }
+
+  if (input.utmContent !== undefined) {
+    data.utmContent = input.utmContent;
+  }
+
+  if (input.botFilterEnabled !== undefined) {
+    data.botFilterEnabled = input.botFilterEnabled;
+  }
+
+  const updated = await prisma.trackingLink.update({
+    where: {
+      id: params.trackingLinkId,
+    },
+    data,
+    select: {
+      id: true,
+      slug: true,
+      platform: true,
+      targetUrl: true,
+      utmSource: true,
+      utmMedium: true,
+      utmCampaign: true,
+      utmContent: true,
+      campaignId: true,
+      contentItemId: true,
+      botFilterEnabled: true,
+    },
+  });
+
+  return {
+    ...updated,
+    resolvedUrl: appendServerUtms(updated),
   };
 }
 

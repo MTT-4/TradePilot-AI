@@ -56,6 +56,8 @@ a8b03ea fix: harden ci and settings operations
   - 内容包 `/design`：「新建内容包」表单 → `POST /api/content-packs/generate`。
   - CRM `/crm`：看板每卡「移至阶段」下拉 → `PATCH /api/crm/opportunities/[id]/stage`。
   - 中文标签字典 `apps/web/app/_lib/labels.ts`：状态/角色/敏感度等枚举统一中文化，新页面请复用。
+  - 对外站点页询盘表单已接线：`app/site/[slug]/[locale]/inquiry-form.tsx` → `POST /api/public/leads/form`
+    （`getPublicSiteLocalePageData` 已返回 `tenantSlug`）。
 
 ## 4. 待继续做（参照高保真原型）
 
@@ -98,6 +100,32 @@ a8b03ea fix: harden ci and settings operations
 3. 在 `/settings` 的"模型策略"表单：加"扫描本地模型"按钮 + 下拉，把所选 chat 模型写入 `localQwenModel`、
    embedding 模型写入 `localBgeModel`（沿用 `server/settings/service.ts` 的 `modelPolicySchema`/`upsertModelPolicy`）。
 4. 注意：扫描只读本机文件、要服务端执行；不要把绝对路径暴露给非管理员。
+
+### 4.4 闭环缺口：AI 首响（本地 Qwen）审阅 / 编辑 / 发送界面（需 DB 环境）
+
+现状：后端只有 `requestReplyDraft`（建草稿+建 REPLY_SEND HITL 任务）和 `approveReplySendTask`（审批即发送），
+见 `apps/web/server/replies/service.ts`；**前端完全没有首响相关界面**，`/hitl` 只能盲批。
+这是闭环核心一环（本地 Qwen 首响草稿 → 人工审 → 发送），原型有专门的"AI 首响审批"屏（询盘正文 + 草稿对照 + 编辑/拒绝/发送）。待做：
+
+1. 后端补「获取草稿详情」与「编辑草稿正文」接口（如 `GET /api/replies/[id]`、`PATCH /api/replies/[id]`），
+   只允许 sales 及以上、PENDING_APPROVAL 状态可改；隐私红线：草稿生成只走本地 Qwen。
+2. 新建 `/replies` 审阅页（套 AppShell）：左侧询盘正文（含机器翻译），右侧本地 Qwen 草稿，
+   支持编辑、拒绝、确认发送（发送沿用 `approveReplySendTask` / `/api/hitl/[id]/approve`）。复用 `.reply-grid/.inq/.draft/.cite` 等类。
+3. 起草入口：在询盘/线索处加"用 AI 起草首响"按钮 → `POST /api/replies/draft`。
+4. 侧栏可把"AI 首响审批"指向 `/replies`（目前指向 `/hitl`）。
+
+### 4.5 缺口：询盘 / 邮件 / 线索详情视图（需 DB 环境）
+
+现状：无 inquiry 列表接口、无线索详情页；CRM 仅有 leads 表 + 最新询盘摘要；inbound-email 入库后前端不可见。待做：
+
+1. 新增询盘列表接口（如 `GET /api/crm/inquiries`，租户+角色鉴权）与"询盘线索池"视图（原型有，可并入 `/crm` 或独立页）。
+2. 线索详情页/抽屉：展示来源归因、历史询盘、活动（`/api/crm/leads/[id]`、`/api/crm/activities` 已存在），并提供进入首响起草的入口。
+3. 邮件询盘可见：把 inbound-email 来源的询盘并入上述列表（按 sourceType 标注）。
+
+### 4.6 缺口（低优先 / 部分属 M7）
+
+- 任务监控页：`/api/jobs`、`/api/jobs/[id]` 有接口、无界面，可加只读运维页。
+- 追踪链接管理页、租户创建/切换：原型/M7 范围，可缓做。
 
 ## 5. 开发约定
 

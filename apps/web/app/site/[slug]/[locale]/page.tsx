@@ -4,6 +4,7 @@ import {
   getPublicSiteLocalePageData,
   type SiteApiLocale,
 } from "@/server/sites/service";
+import { InquiryForm } from "./inquiry-form";
 
 const supportedLocales = new Set<SiteApiLocale>([
   "en",
@@ -213,41 +214,11 @@ export default async function PublicSiteLocalePage({
 
       <section className="mx-auto w-full max-w-6xl px-4 pb-16 md:px-8">
         <div className="grid gap-6 lg:grid-cols-[0.7fr_0.3fr]">
-          <form
-            id="inquiry-form"
-            className="rounded-[28px] border border-[#e4dcc8] bg-white p-6 shadow-[0_18px_70px_rgba(54,45,23,0.06)]"
-          >
-            <h2 className="text-2xl font-semibold tracking-tight">
-              {ctaLabel}
-            </h2>
-            <p className="mt-2 text-sm leading-7 text-[#666154]">
-              Public preview only. Lead capture wiring will be connected in the CRM stage.
-            </p>
-            <div className="mt-5 grid gap-3 md:grid-cols-2">
-              <input
-                className="rounded-2xl border border-[#ddd3bd] px-4 py-3 text-sm outline-none"
-                placeholder="Name"
-              />
-              <input
-                className="rounded-2xl border border-[#ddd3bd] px-4 py-3 text-sm outline-none"
-                placeholder="Company"
-              />
-              <input
-                className="rounded-2xl border border-[#ddd3bd] px-4 py-3 text-sm outline-none md:col-span-2"
-                placeholder="Email"
-              />
-              <textarea
-                className="min-h-32 rounded-2xl border border-[#ddd3bd] px-4 py-3 text-sm outline-none md:col-span-2"
-                placeholder="What project or market are you targeting?"
-              />
-            </div>
-            <button
-              type="button"
-              className="mt-4 rounded-full bg-[#1f6a52] px-5 py-3 text-sm font-medium text-white"
-            >
-              {ctaLabel}
-            </button>
-          </form>
+          <InquiryForm
+            tenantSlug={data.tenantSlug}
+            ctaLabel={ctaLabel}
+            preferredLocale={data.locale.locale}
+          />
 
           <aside className="rounded-[28px] border border-[#e4dcc8] bg-[#f6f2e6] p-6">
             <h2 className="text-lg font-semibold">Hreflang</h2>

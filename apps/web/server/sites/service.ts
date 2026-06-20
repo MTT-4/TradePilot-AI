@@ -2644,6 +2644,11 @@ export async function getPublicSiteLocalePageData(params: {
       createdAt: true,
       updatedAt: true,
       publishedAt: true,
+      tenant: {
+        select: {
+          slug: true,
+        },
+      },
       currentVersion: {
         select: {
           id: true,
@@ -2729,6 +2734,7 @@ export async function getPublicSiteLocalePageData(params: {
 
   return {
     project: detail.project,
+    tenantSlug: siteProject.tenant.slug,
     pages: detail.pages,
     locale: {
       ...localeDetail,

@@ -169,18 +169,18 @@ export function HitlClient() {
       ) : null}
 
       <div className="stat-strip" style={{ gridTemplateColumns: "repeat(3, 1fr)" }}>
-        <div className="stat">
+        <Link className="stat" href="/sites" style={{ display: "block" }}>
           <div className="v">{tasks.filter((task) => task.type === "site_publish").length}</div>
-          <div className="l">站点待批</div>
-        </div>
-        <div className="stat">
+          <div className="l">站点待批 →</div>
+        </Link>
+        <Link className="stat" href="/design" style={{ display: "block" }}>
           <div className="v">{tasks.filter((task) => task.type === "content_publish").length}</div>
-          <div className="l">内容待批</div>
-        </div>
-        <div className="stat">
+          <div className="l">内容待批 →</div>
+        </Link>
+        <Link className="stat" href="/replies" style={{ display: "block" }}>
           <div className="v">{tasks.filter((task) => task.type === "reply_send").length}</div>
-          <div className="l">首响待批</div>
-        </div>
+          <div className="l">首响待批 →</div>
+        </Link>
       </div>
 
       <div className="head-row" style={{ marginBottom: 10 }}>

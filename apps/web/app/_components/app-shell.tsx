@@ -171,6 +171,16 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const [notifications, setNotifications] = useState<NotificationItem[]>([]);
   const [unread, setUnread] = useState(0);
   const [notifOpen, setNotifOpen] = useState(false);
+  const [userOpen, setUserOpen] = useState(false);
+
+  async function handleLogout() {
+    try {
+      await fetch("/api/auth/logout", { method: "POST" });
+    } catch {
+      // 即使请求失败也跳回登录页
+    }
+    window.location.assign("/login");
+  }
 
   useEffect(() => {
     if (bare) {
@@ -341,7 +351,49 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                 </div>
               ) : null}
             </div>
-            <div className="avatar">{avatarInitial}</div>
+            <div style={{ position: "relative" }}>
+              <button
+                type="button"
+                className="avatar"
+                onClick={() => setUserOpen((open) => !open)}
+                aria-label="个人菜单"
+              >
+                {avatarInitial}
+              </button>
+              {userOpen ? (
+                <div className="notif" style={{ width: 240 }}>
+                  <div className="nh">
+                    <b>{me?.user.name?.trim() || "当前用户"}</b>
+                  </div>
+                  <div className="ni" style={{ cursor: "default" }}>
+                    <div className="grow">
+                      <div className="ns">{me?.user.email ?? "未登录"}</div>
+                      <div className="ns" style={{ marginTop: 2 }}>
+                        {tenantName ?? "本地服务器"}
+                      </div>
+                    </div>
+                  </div>
+                  <Link href="/settings" className="ni" onClick={() => setUserOpen(false)}>
+                    <div className="grow">
+                      <div className="nt">设置 / 治理</div>
+                    </div>
+                  </Link>
+                  <button
+                    type="button"
+                    className="ni"
+                    style={{ width: "100%", textAlign: "left" }}
+                    onClick={() => {
+                      setUserOpen(false);
+                      void handleLogout();
+                    }}
+                  >
+                    <div className="grow">
+                      <div className="nt" style={{ color: "var(--warn)" }}>退出登录</div>
+                    </div>
+                  </button>
+                </div>
+              ) : null}
+            </div>
           </div>
         </header>
 

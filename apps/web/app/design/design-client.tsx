@@ -296,14 +296,14 @@ export function DesignClient() {
           <div className="v">{items.length}</div>
           <div className="l">全部内容</div>
         </div>
-        <div className="stat">
+        <Link className="stat" href="/hitl" style={{ display: "block" }}>
           <div className="v">{pendingCount}</div>
-          <div className="l">审批中</div>
-        </div>
-        <div className="stat">
+          <div className="l">审批中 →</div>
+        </Link>
+        <Link className="stat" href="/publish-checklist" style={{ display: "block" }}>
           <div className="v">{items.filter((item) => item.publishStatus === "pending").length}</div>
-          <div className="l">待发布</div>
-        </div>
+          <div className="l">待发布 →</div>
+        </Link>
       </div>
 
       <div className="pack-grid">

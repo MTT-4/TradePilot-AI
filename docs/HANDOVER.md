@@ -49,6 +49,13 @@ a8b03ea fix: harden ci and settings operations
 - **演示账号**（在 `prisma/seed.ts`，需重新 `npm run prisma:seed` 生效）：
   - `owner-a@tradepilot.local` / `TradePilot@2026`（所有者 · 租户 A，未开 2FA，可直接登录）
   - 另有 `sales-a` / `owner-b` / `sales-b`，密码相同。上线前务必改密码并按需启用 2FA。
+- **已补齐的前端入口（接现有 API，勿重复做）**：
+  - 知识库 `/kb/reviews`：上传区(`POST /api/kb/documents`)、文档列表+失败重试(`/kb/documents/[id]/retry`)、
+    公开检索框(`POST /api/kb/search`)。
+  - 站点 `/sites`：「新建站点」表单 → `POST /api/sites/generate`。
+  - 内容包 `/design`：「新建内容包」表单 → `POST /api/content-packs/generate`。
+  - CRM `/crm`：看板每卡「移至阶段」下拉 → `PATCH /api/crm/opportunities/[id]/stage`。
+  - 中文标签字典 `apps/web/app/_lib/labels.ts`：状态/角色/敏感度等枚举统一中文化，新页面请复用。
 
 ## 4. 待继续做（参照高保真原型）
 

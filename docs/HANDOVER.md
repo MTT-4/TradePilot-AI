@@ -29,6 +29,10 @@ a8b03ea fix: harden ci and settings operations
   改样式优先复用这些类，不要再写一次性 Tailwind 硬编码颜色。
 - **共享框架** `apps/web/app/_components/app-shell.tsx`：深色侧边栏 + 顶栏，在 `layout.tsx` 里包裹所有页面；
   `/login` 与 `/site/`（对外站点）会自动不套框架。导航高亮跟随路由，顶栏铃铛拉真实未读数。
+  - 顶栏头像是账号菜单（邮箱/租户、设置入口、退出登录走 `POST /api/auth/logout`）。
+  - **多标签栏**：访问过的页面在顶栏下累积为可切换/可关闭标签，状态存在 AppShell（路由切换不重挂、整页刷新重置）。
+    标签标题由 `resolveTitle(pathname)` 决定；新增顶层路由时在 `TITLE_BY_PREFIX` 里补标题。
+    注意该机制用 `useEffect` 累积标签，改 AppShell 时勿误删（已对该处 setState-in-effect 加 lint 豁免）。
 - **字体**：`layout.tsx` 用 next/font 接入 Space Grotesk / Inter / Space Mono，变量对应 globals.css 的 `--font-*`。
 - **已按原型改版的页面**：工作台 (`/`)、登录 (`/login`)、知识库 (`/kb/reviews`)、站点 (`/sites`)、
   内容包 (`/design`)、CRM (`/crm`)、首响审批 (`/hitl`)、站点对话编辑 (`/sites/[id]/chat`)、

@@ -7,6 +7,8 @@ import { submitPublicLeadForm } from "@/server/leads/service";
 import {
   createCrmActivity,
   getCrmLeadDetail,
+  listCrmActivities,
+  listCrmInquiries,
   listCrmLeads,
   listCrmOpportunities,
   updateCrmLead,
@@ -172,6 +174,17 @@ describe("T4.3 CRM service", () => {
 
     expect(detail.lead.inquiries.some((item) => item.sourceType === "form")).toBe(true);
     expect(detail.lead.inquiries.some((item) => item.sourceType === "email")).toBe(true);
+
+    const inquiries = await listCrmInquiries({
+      tenantContext: salesContext,
+      filters: {
+        leadId: formResult.leadId,
+      },
+    });
+
+    expect(inquiries.items.length).toBeGreaterThanOrEqual(2);
+    expect(inquiries.items.some((item) => item.sourceType === "form")).toBe(true);
+    expect(inquiries.items.some((item) => item.sourceType === "email")).toBe(true);
   });
 
   it("returns 403 when sales tries to access another user's lead", async () => {
@@ -284,6 +297,16 @@ describe("T4.3 CRM service", () => {
     });
 
     expect(note.activity.type).toBe("note");
+
+    const activities = await listCrmActivities({
+      tenantContext: salesContext,
+      filters: {
+        leadId: lead.id,
+      },
+    });
+
+    expect(activities.items.some((item) => item.type === "stage_change")).toBe(true);
+    expect(activities.items.some((item) => item.type === "note")).toBe(true);
 
     const opportunities = await listCrmOpportunities({
       tenantContext: salesContext,

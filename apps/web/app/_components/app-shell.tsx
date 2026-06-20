@@ -120,6 +120,28 @@ const NAV_GROUPS: NavGroup[] = [
         ),
       },
       {
+        href: "/tracking-links",
+        label: "追踪链接",
+        icon: icon(
+          <>
+            <path d="M10 13a5 5 0 0 0 7.07 0l2.83-2.83a5 5 0 0 0-7.07-7.07L11 4" />
+            <path d="M14 11a5 5 0 0 0-7.07 0L4.1 13.83a5 5 0 1 0 7.07 7.07L13 19" />
+          </>,
+        ),
+      },
+      {
+        href: "/jobs",
+        label: "任务监控",
+        icon: icon(
+          <>
+            <path d="M4 19h16" />
+            <path d="M7 15V9" />
+            <path d="M12 15V5" />
+            <path d="M17 15v-3" />
+          </>,
+        ),
+      },
+      {
         href: "/settings",
         label: "设置 / 治理",
         icon: icon(
@@ -143,6 +165,8 @@ const TITLE_BY_PREFIX: Array<[string, string]> = [
   ["/hitl", "人工把关 · 审批中心"],
   ["/notifications", "通知中心"],
   ["/publish-checklist", "发布清单"],
+  ["/tracking-links", "追踪链接"],
+  ["/jobs", "任务监控"],
   ["/settings", "设置 / 治理"],
 ];
 

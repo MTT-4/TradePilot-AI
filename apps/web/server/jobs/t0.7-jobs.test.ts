@@ -5,6 +5,7 @@ import {
   enqueueTenantJob,
   getJobQueue,
   getTenantJobById,
+  listTenantJobs,
 } from "@/server/jobs/service";
 import { closeJobWorker, startJobWorker } from "@/server/jobs/worker";
 
@@ -132,5 +133,41 @@ describe("T0.7 jobs", () => {
     });
 
     expect(matchingJobs).toHaveLength(1);
+  });
+
+  it("lists tenant jobs in reverse chronological order and supports status filters", async () => {
+    const first = await enqueueTenantJob({
+      tenantContext: tenantContextA,
+      requestedByUserId: tenantContextA.userId,
+      type: "GENERATE_REPLY",
+      idempotencyKey: `t0-7-list-a-${Date.now()}`,
+      input: {
+        inquiryId: "list-a",
+        simulateMs: 50,
+      },
+    });
+    const second = await enqueueTenantJob({
+      tenantContext: tenantContextA,
+      requestedByUserId: tenantContextA.userId,
+      type: "GENERATE_SITE",
+      idempotencyKey: `t0-7-list-b-${Date.now()}`,
+      input: {
+        siteId: "site-list-b",
+        simulateMs: 50,
+      },
+    });
+
+    const queued = await listTenantJobs(tenantContextA, {
+      status: "QUEUED",
+      limit: 10,
+    });
+
+    const queuedIds = queued.map((item) => item.id);
+
+    expect(queuedIds).toContain(first.jobId);
+    expect(queuedIds).toContain(second.jobId);
+    expect(
+      queued.every((item) => item.status === "QUEUED"),
+    ).toBe(true);
   });
 });

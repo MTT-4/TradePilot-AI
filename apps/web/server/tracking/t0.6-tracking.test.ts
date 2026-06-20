@@ -5,6 +5,7 @@ import { getPrismaClient } from "@/server/db/prisma";
 import type { TenantContext } from "@/server/db/tenant-context";
 import {
   createTrackingLink,
+  listTrackingLinks,
   resolveTrackingAttributionBySlug,
 } from "@/server/tracking/service";
 
@@ -139,6 +140,13 @@ describe("T0.6 tracking service", () => {
       platform: "LINKEDIN",
       targetUrl: "https://example.com/products/ts-75?foo=1",
     });
+
+    const listing = await listTrackingLinks(tenantContextA, { limit: 20 });
+    const listed = listing.items.find((item) => item.id === trackingLink.id);
+
+    expect(listed).toBeTruthy();
+    expect(listed?.resolvedUrl).toContain("utm_source=linkedin");
+    expect(listed?.stats.clicksTotal).toBeGreaterThanOrEqual(0);
   });
 
   it("R3.1 writes click_event from the server-side tracking link and redirects", async () => {

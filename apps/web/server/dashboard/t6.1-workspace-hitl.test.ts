@@ -353,7 +353,7 @@ describe("T6.1 workspace + T6.2 notifications/hitl", () => {
           inquiryId: "inq-123",
         },
       }),
-    ).toBe("/crm?inquiryId=inq-123");
+    ).toBe("/replies");
   });
 
   it("covers the closed loop from publish approval to tracked inquiry, reply approval, and dashboard drilldown", async () => {
@@ -515,6 +515,6 @@ describe("T6.1 workspace + T6.2 notifications/hitl", () => {
       payload: {
         inquiryId: formResult.inquiryId,
       },
-    })).toContain("/crm?inquiryId=");
+    })).toBe("/replies");
   });
 });

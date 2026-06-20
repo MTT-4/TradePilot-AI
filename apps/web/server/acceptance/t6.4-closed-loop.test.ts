@@ -789,6 +789,6 @@ describe("T6.4 four-role closed-loop acceptance", () => {
           inquiryId: firstForm.inquiryId,
         },
       }),
-    ).toBe(`/crm?inquiryId=${firstForm.inquiryId}`);
+    ).toBe("/replies");
   });
 });

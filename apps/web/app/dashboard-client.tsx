@@ -146,7 +146,7 @@ const LOOP_NODES: LoopNode[] = [
   { title: "发布", cx: 245, cy: 245, labelX: 268, labelY: 256, anchor: "start", tone: "amber", href: "/design" },
   { title: "询盘", cx: 160, cy: 280, labelX: 160, labelY: 302, anchor: "middle", tone: "amber", href: "/crm" },
   { title: "CRM", cx: 75, cy: 245, labelX: 52, labelY: 256, anchor: "end", tone: "teal", href: "/crm" },
-  { title: "首响", cx: 40, cy: 160, labelX: 27, labelY: 164, anchor: "end", tone: "local", href: "/hitl" },
+  { title: "首响", cx: 40, cy: 160, labelX: 27, labelY: 164, anchor: "end", tone: "local", href: "/replies" },
   { title: "反哺", cx: 75, cy: 75, labelX: 52, labelY: 70, anchor: "end", tone: "teal", href: "/crm" },
 ];
 
@@ -405,7 +405,7 @@ export function DashboardClient() {
                   <span className="go">查看 →</span>
                 </div>
               </div>
-              <div className="lstat" onClick={() => router.push("/hitl")}>
+              <div className="lstat" onClick={() => router.push("/replies")}>
                 <div>
                   <div className="n">{replyMedian}</div>
                   <div className="l">AI 首响中位耗时（分钟）</div>
@@ -511,7 +511,7 @@ export function DashboardClient() {
           <div className="ad">多平台适配 + 发布清单</div>
           <div className="as idle">○ {pendingPublish} 条待发布</div>
         </Link>
-        <Link className="agent lo" href="/hitl">
+        <Link className="agent lo" href="/replies">
           <span className="badge local tag">本地</span>
           <div className="ai">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>

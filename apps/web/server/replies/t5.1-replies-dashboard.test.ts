@@ -2,10 +2,16 @@ import { beforeAll, describe, expect, it, vi } from "vitest";
 import {
   JobType,
   ModelRoute,
+  ReplyStatus,
 } from "@prisma/client";
 import { getPrismaClient } from "@/server/db/prisma";
 import type { TenantContext } from "@/server/db/tenant-context";
-import { requestReplyDraft } from "@/server/replies/service";
+import {
+  getReplyDetail,
+  rejectReplyDraft,
+  requestReplyDraft,
+  updateReplyDraft,
+} from "@/server/replies/service";
 import { approveHitlTask } from "@/server/sites/service";
 import { getDashboardSummary } from "@/server/dashboard/service";
 
@@ -119,6 +125,31 @@ function createReplyFetchMock(options?: {
           usage: {
             prompt_tokens: 18,
             completion_tokens: 8,
+          },
+        });
+      }
+
+      const isTranslateCall =
+        typeof body === "object" &&
+        body !== null &&
+        "messages" in body &&
+        Array.isArray(body.messages) &&
+        typeof body.messages[0]?.content === "string" &&
+        body.messages[0].content.includes("Translate the text accurately");
+
+      if (isTranslateCall) {
+        return jsonResponse({
+          model: process.env.LOCAL_QWEN_MODEL,
+          choices: [
+            {
+              message: {
+                content: "客户需要分销报价、MOQ 和交期，请先确认合作范围。",
+              },
+            },
+          ],
+          usage: {
+            prompt_tokens: 20,
+            completion_tokens: 16,
           },
         });
       }
@@ -419,5 +450,124 @@ describe("T5.1 replies + T5.3 dashboard", () => {
       status: 403,
       code: "FORBIDDEN",
     });
+  });
+
+  it("returns reply detail with translated inquiry and allows editing pending drafts", async () => {
+    const { counters, fetchMock } = createReplyFetchMock();
+    const drafted = await requestReplyDraft({
+      tenantContext: salesContext,
+      requestedByUserId: salesContext.userId,
+      input: {
+        inquiryId,
+      },
+      fetchImpl: fetchMock,
+    });
+
+    const detail = await getReplyDetail({
+      tenantContext: salesContext,
+      replyId: drafted.replyId,
+      requestedByUserId: salesContext.userId,
+      fetchImpl: fetchMock,
+    });
+
+    expect(detail.reply.id).toBe(drafted.replyId);
+    expect(detail.reply.status).toBe("pending_approval");
+    expect(detail.reply.hitlTaskId).toBe(drafted.hitlTaskId);
+    expect(detail.reply.inquiry.translatedBody).toContain("客户需要分销报价");
+    expect(counters.openai).toBe(0);
+    expect(counters.google).toBe(0);
+    expect(counters.localQwen).toBe(2);
+
+    const updated = await updateReplyDraft({
+      tenantContext: salesContext,
+      replyId: drafted.replyId,
+      requestedByUserId: salesContext.userId,
+      input: {
+        draftText: "Updated reply draft for manual review.",
+      },
+    });
+
+    expect(updated.reply.draftText).toBe("Updated reply draft for manual review.");
+    expect(updated.reply.inquiry.translatedBody).toBeNull();
+
+    const hitlTask = await prisma.hitlTask.findUniqueOrThrow({
+      where: {
+        id: drafted.hitlTaskId,
+      },
+      select: {
+        payload: true,
+      },
+    });
+
+    expect(hitlTask.payload).toMatchObject({
+      draftText: "Updated reply draft for manual review.",
+    });
+  });
+
+  it("allows rejecting pending drafts and closes the pending HITL task", async () => {
+    const { fetchMock } = createReplyFetchMock();
+    const drafted = await requestReplyDraft({
+      tenantContext: salesContext,
+      requestedByUserId: salesContext.userId,
+      input: {
+        inquiryId,
+      },
+      fetchImpl: fetchMock,
+    });
+
+    await expect(
+      rejectReplyDraft({
+        tenantContext: viewerContext,
+        replyId: drafted.replyId,
+        rejectedByUserId: viewerContext.userId,
+        input: {
+          reason: "viewer cannot reject",
+        },
+      }),
+    ).rejects.toMatchObject({
+      status: 403,
+      code: "FORBIDDEN",
+    });
+
+    const rejected = await rejectReplyDraft({
+      tenantContext: salesContext,
+      replyId: drafted.replyId,
+      rejectedByUserId: salesContext.userId,
+      input: {
+        reason: "Need pricing confirmation first",
+      },
+    });
+
+    expect(rejected).toEqual({
+      replyId: drafted.replyId,
+      status: "rejected",
+    });
+
+    const reply = await prisma.reply.findUniqueOrThrow({
+      where: {
+        id: drafted.replyId,
+      },
+      select: {
+        status: true,
+      },
+    });
+    expect(reply.status).toBe(ReplyStatus.REJECTED);
+
+    const task = await prisma.hitlTask.findUniqueOrThrow({
+      where: {
+        id: drafted.hitlTaskId,
+      },
+      select: {
+        status: true,
+        reason: true,
+        rejectedByUserId: true,
+        resolvedAt: true,
+      },
+    });
+
+    expect(task.status).toBe("REJECTED");
+    expect(task.reason).toBe("Need pricing confirmation first");
+    expect(task.rejectedByUserId).toBe(salesContext.userId);
+    expect(task.resolvedAt).toBeTruthy();
   });
 });

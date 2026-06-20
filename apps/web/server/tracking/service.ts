@@ -214,6 +214,84 @@ export async function createTrackingLink(
   };
 }
 
+export async function listTrackingLinks(
+  tenantContext: TenantContext,
+  options?: {
+    limit?: number;
+  },
+) {
+  const prisma = getTenantPrisma(tenantContext);
+  const items = await prisma.trackingLink.findMany({
+    orderBy: {
+      createdAt: "desc",
+    },
+    take: options?.limit ?? 50,
+    select: {
+      id: true,
+      slug: true,
+      platform: true,
+      targetUrl: true,
+      utmSource: true,
+      utmMedium: true,
+      utmCampaign: true,
+      utmContent: true,
+      botFilterEnabled: true,
+      createdAt: true,
+      contentItem: {
+        select: {
+          id: true,
+          title: true,
+          locale: true,
+          publishStatus: true,
+        },
+      },
+      clickEvents: {
+        orderBy: {
+          occurredAt: "desc",
+        },
+        select: {
+          id: true,
+          isBot: true,
+          occurredAt: true,
+        },
+      },
+      leads: {
+        select: {
+          id: true,
+        },
+      },
+    },
+  });
+
+  return {
+    items: items.map((item) => ({
+      id: item.id,
+      slug: item.slug,
+      platform: item.platform.toLowerCase(),
+      targetUrl: item.targetUrl,
+      resolvedUrl: appendServerUtms(item),
+      utmSource: item.utmSource,
+      utmMedium: item.utmMedium,
+      utmCampaign: item.utmCampaign,
+      utmContent: item.utmContent,
+      botFilterEnabled: item.botFilterEnabled,
+      createdAt: item.createdAt.toISOString(),
+      contentItem: {
+        id: item.contentItem.id,
+        title: item.contentItem.title,
+        locale: item.contentItem.locale.toLowerCase(),
+        publishStatus: item.contentItem.publishStatus.toLowerCase(),
+      },
+      stats: {
+        clicksTotal: item.clickEvents.length,
+        clicksHuman: item.clickEvents.filter((click) => !click.isBot).length,
+        leads: item.leads.length,
+        latestClickAt: item.clickEvents[0]?.occurredAt.toISOString() ?? null,
+      },
+    })),
+  };
+}
+
 export async function resolveTrackingAttributionBySlug(slug: string) {
   const normalizedSlug = slug.trim();
 

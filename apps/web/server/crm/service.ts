@@ -28,6 +28,12 @@ export const listCrmLeadsFiltersSchema = z.object({
   source: z.enum(["form", "email"]).optional(),
 });
 
+export const listCrmInquiriesFiltersSchema = z.object({
+  leadId: z.string().min(1).optional(),
+  source: z.enum(["form", "email"]).optional(),
+  limit: z.coerce.number().int().min(1).max(100).optional(),
+});
+
 export const updateCrmLeadSchema = z.object({
   ownerUserId: z.string().min(1).nullable().optional(),
   status: z
@@ -39,6 +45,17 @@ export const updateCrmLeadSchema = z.object({
 export const listCrmOpportunitiesFiltersSchema = z.object({
   stage: z.enum(["new", "contacted", "quoted", "won", "lost"]).optional(),
 });
+
+export const listCrmActivitiesFiltersSchema = z
+  .object({
+    leadId: z.string().min(1).optional(),
+    opportunityId: z.string().min(1).optional(),
+    limit: z.coerce.number().int().min(1).max(100).optional(),
+  })
+  .refine((value) => value.leadId || value.opportunityId, {
+    message: "leadId or opportunityId is required.",
+    path: ["leadId"],
+  });
 
 export const updateOpportunityStageSchema = z.object({
   stage: z.enum(["new", "contacted", "quoted", "won", "lost"]),
@@ -467,6 +484,139 @@ export async function getCrmLeadDetail(params: {
   };
 }
 
+export async function listCrmInquiries(params: {
+  tenantContext: TenantContext;
+  filters?: unknown;
+}) {
+  const filters = parseSchemaOrThrow(listCrmInquiriesFiltersSchema, params.filters ?? {});
+
+  if (filters.leadId) {
+    await getAccessibleLeadOrThrow({
+      tenantContext: params.tenantContext,
+      leadId: filters.leadId,
+    });
+  }
+
+  const prisma = getPrismaClient();
+  const where: Prisma.InquiryWhereInput = {
+    tenantId: params.tenantContext.tenantId,
+    ...(params.tenantContext.role === "SALES"
+      ? {
+          lead: {
+            ownerUserId: params.tenantContext.userId,
+          },
+        }
+      : {}),
+    ...(filters.leadId ? { leadId: filters.leadId } : {}),
+    ...(filters.source
+      ? {
+          sourceType: filters.source.toUpperCase() as "FORM" | "EMAIL",
+        }
+      : {}),
+  };
+
+  const inquiries = await prisma.inquiry.findMany({
+    where,
+    orderBy: {
+      createdAt: "desc",
+    },
+    take: filters.limit ?? 40,
+    select: {
+      id: true,
+      sourceType: true,
+      subject: true,
+      body: true,
+      fromEmail: true,
+      fromName: true,
+      createdAt: true,
+      lead: {
+        select: {
+          id: true,
+          companyName: true,
+          country: true,
+          status: true,
+          ownerUserId: true,
+          contact: {
+            select: {
+              name: true,
+              email: true,
+            },
+          },
+          owner: {
+            select: {
+              id: true,
+              name: true,
+              email: true,
+            },
+          },
+          trackingLink: {
+            select: {
+              slug: true,
+              platform: true,
+            },
+          },
+          sourceContentItem: {
+            select: {
+              title: true,
+              platform: true,
+            },
+          },
+        },
+      },
+      replies: {
+        orderBy: {
+          createdAt: "desc",
+        },
+        take: 1,
+        select: {
+          id: true,
+          status: true,
+          sentAt: true,
+          updatedAt: true,
+        },
+      },
+    },
+  });
+
+  return {
+    items: inquiries.map((inquiry) => ({
+      id: inquiry.id,
+      sourceType: inquiry.sourceType.toLowerCase(),
+      subject: inquiry.subject,
+      bodyPreview: inquiry.body.slice(0, 220),
+      fromEmail: inquiry.fromEmail,
+      fromName: inquiry.fromName,
+      createdAt: inquiry.createdAt.toISOString(),
+      lead: {
+        id: inquiry.lead.id,
+        companyName: inquiry.lead.companyName,
+        country: inquiry.lead.country,
+        status: inquiry.lead.status.toLowerCase(),
+        ownerUserId: inquiry.lead.ownerUserId,
+        contactName: inquiry.lead.contact?.name ?? null,
+        contactEmail: inquiry.lead.contact?.email ?? null,
+        owner: inquiry.lead.owner,
+      },
+      sourceAttribution: {
+        platform:
+          inquiry.lead.trackingLink?.platform.toLowerCase() ??
+          inquiry.lead.sourceContentItem?.platform.toLowerCase() ??
+          null,
+        contentTitle: inquiry.lead.sourceContentItem?.title ?? null,
+        trackingSlug: inquiry.lead.trackingLink?.slug ?? null,
+      },
+      latestReply: inquiry.replies[0]
+        ? {
+            id: inquiry.replies[0].id,
+            status: inquiry.replies[0].status.toLowerCase(),
+            sentAt: inquiry.replies[0].sentAt?.toISOString() ?? null,
+            updatedAt: inquiry.replies[0].updatedAt.toISOString(),
+          }
+        : null,
+    })),
+  };
+}
+
 export async function updateCrmLead(params: {
   tenantContext: TenantContext;
   leadId: string;
@@ -583,6 +733,67 @@ export async function listCrmOpportunities(params: {
       followUpDueAt: opportunity.followUpDueAt?.toISOString() ?? null,
       closedAt: opportunity.closedAt?.toISOString() ?? null,
       owner: opportunity.owner,
+    })),
+  };
+}
+
+export async function listCrmActivities(params: {
+  tenantContext: TenantContext;
+  filters: unknown;
+}) {
+  const filters = parseSchemaOrThrow(listCrmActivitiesFiltersSchema, params.filters);
+
+  if (filters.leadId) {
+    await getAccessibleLeadOrThrow({
+      tenantContext: params.tenantContext,
+      leadId: filters.leadId,
+    });
+  }
+
+  if (filters.opportunityId) {
+    await getAccessibleOpportunityOrThrow({
+      tenantContext: params.tenantContext,
+      opportunityId: filters.opportunityId,
+    });
+  }
+
+  const prisma = getPrismaClient();
+  const items = await prisma.crmActivity.findMany({
+    where: {
+      tenantId: params.tenantContext.tenantId,
+      ...(filters.leadId ? { leadId: filters.leadId } : {}),
+      ...(filters.opportunityId ? { opportunityId: filters.opportunityId } : {}),
+    },
+    orderBy: {
+      createdAt: "desc",
+    },
+    take: filters.limit ?? 20,
+    select: {
+      id: true,
+      leadId: true,
+      opportunityId: true,
+      type: true,
+      body: true,
+      createdAt: true,
+      actor: {
+        select: {
+          id: true,
+          name: true,
+          email: true,
+        },
+      },
+    },
+  });
+
+  return {
+    items: items.map((activity) => ({
+      id: activity.id,
+      leadId: activity.leadId,
+      opportunityId: activity.opportunityId,
+      type: activity.type.toLowerCase(),
+      body: activity.body,
+      createdAt: activity.createdAt.toISOString(),
+      actor: activity.actor,
     })),
   };
 }

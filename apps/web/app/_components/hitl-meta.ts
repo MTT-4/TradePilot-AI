@@ -64,10 +64,7 @@ export function resolveTaskHref(task: Pick<HitlTaskItem, "type" | "entityId" | "
   }
 
   if (task.type === "reply_send") {
-    const inquiryId =
-      typeof task.payload.inquiryId === "string" ? task.payload.inquiryId : null;
-
-    return inquiryId ? `/crm?inquiryId=${inquiryId}` : "/hitl";
+    return "/replies";
   }
 
   return "/hitl";

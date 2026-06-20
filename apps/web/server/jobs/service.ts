@@ -1,5 +1,6 @@
 import {
   MembershipRole,
+  type JobStatus,
   type JobType,
 } from "@prisma/client";
 import { Queue, type JobsOptions } from "bullmq";
@@ -16,6 +17,12 @@ type EnqueueTenantJobInput = {
   input?: Record<string, unknown>;
   idempotencyKey?: string;
   maxAttempts?: number;
+};
+
+type ListTenantJobsFilters = {
+  status?: JobStatus;
+  type?: JobType;
+  limit?: number;
 };
 
 export type QueuePayload = {
@@ -169,6 +176,44 @@ export async function getTenantJobById(
   }
 
   return job;
+}
+
+export async function listTenantJobs(
+  tenantContext: TenantContext,
+  filters: ListTenantJobsFilters = {},
+) {
+  const tenantPrisma = getTenantPrisma(tenantContext);
+  const jobs = await tenantPrisma.job.findMany({
+    where: {
+      ...(filters.status ? { status: filters.status } : {}),
+      ...(filters.type ? { type: filters.type } : {}),
+    },
+    orderBy: [
+      {
+        createdAt: "desc",
+      },
+      {
+        updatedAt: "desc",
+      },
+    ],
+    take: filters.limit ?? 50,
+    select: {
+      id: true,
+      type: true,
+      status: true,
+      progress: true,
+      attempts: true,
+      maxAttempts: true,
+      error: true,
+      input: true,
+      output: true,
+      requestedByUserId: true,
+      createdAt: true,
+      updatedAt: true,
+    },
+  });
+
+  return jobs;
 }
 
 export function getSystemTenantContext(

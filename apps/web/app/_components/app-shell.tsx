@@ -3,7 +3,12 @@
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
-import { fetchCurrentMe, type MeResponse } from "@/app/_lib/auth-client";
+import {
+  fetchCurrentMe,
+  setPreferredTenantId,
+  type MeResponse,
+} from "@/app/_lib/auth-client";
+import { roleLabel } from "@/app/_lib/labels";
 
 type NotificationItem = {
   id: string;
@@ -220,6 +225,52 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const [unread, setUnread] = useState(0);
   const [notifOpen, setNotifOpen] = useState(false);
   const [userOpen, setUserOpen] = useState(false);
+  const [tenantOpen, setTenantOpen] = useState(false);
+  const [showCreateTenant, setShowCreateTenant] = useState(false);
+  const [newTenantName, setNewTenantName] = useState("");
+  const [newTenantLocale, setNewTenantLocale] = useState("en");
+  const [creatingTenant, setCreatingTenant] = useState(false);
+  const [tenantError, setTenantError] = useState<string | null>(null);
+
+  function switchTenant(tenantId: string) {
+    const current =
+      me?.currentTenant?.tenantId ?? me?.memberships[0]?.tenantId;
+    if (tenantId === current) {
+      setTenantOpen(false);
+      return;
+    }
+    setPreferredTenantId(tenantId);
+    window.location.reload();
+  }
+
+  async function createTenant() {
+    if (!newTenantName.trim()) {
+      return;
+    }
+    setCreatingTenant(true);
+    setTenantError(null);
+    try {
+      const response = await fetch("/api/tenants", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: newTenantName.trim(),
+          defaultLocale: newTenantLocale,
+        }),
+      });
+      const payload = await response.json().catch(() => null);
+      if (!response.ok) {
+        throw new Error(payload?.error?.message ?? "创建租户失败。");
+      }
+      if (payload?.tenantId) {
+        setPreferredTenantId(payload.tenantId);
+      }
+      window.location.reload();
+    } catch (createError) {
+      setTenantError(createError instanceof Error ? createError.message : "创建租户失败。");
+      setCreatingTenant(false);
+    }
+  }
 
   async function handleLogout() {
     try {
@@ -332,9 +383,112 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         <header className="topbar">
           <h1>{resolveTitle(pathname)}</h1>
           <div className="tb-right">
-            <span className="pill">
-              市场 <b>中东 · 拉美 · 独联体</b>
-            </span>
+            <div style={{ position: "relative" }}>
+              <button
+                type="button"
+                className="pill"
+                style={{ cursor: "pointer" }}
+                onClick={() => setTenantOpen((open) => !open)}
+              >
+                租户 <b>{tenantName ?? "选择租户"}</b>
+                <span style={{ fontSize: 10, opacity: 0.6 }}>▾</span>
+              </button>
+              {tenantOpen ? (
+                <div className="notif" style={{ width: 260 }}>
+                  <div className="nh">
+                    <b>切换租户</b>
+                  </div>
+                  {(me?.memberships ?? []).map((membership) => {
+                    const active =
+                      membership.tenantId ===
+                      (me?.currentTenant?.tenantId ?? me?.memberships[0]?.tenantId);
+                    return (
+                      <button
+                        key={membership.tenantId}
+                        type="button"
+                        className="ni"
+                        style={{ width: "100%", textAlign: "left" }}
+                        onClick={() => switchTenant(membership.tenantId)}
+                      >
+                        <div className="grow">
+                          <div className="nt">{membership.tenantName}</div>
+                          <div className="ns">{roleLabel(membership.role)}</div>
+                        </div>
+                        {active ? <span className="badge good">当前</span> : null}
+                      </button>
+                    );
+                  })}
+                  {!showCreateTenant ? (
+                    <button
+                      type="button"
+                      className="ni"
+                      style={{ width: "100%", textAlign: "left" }}
+                      onClick={() => setShowCreateTenant(true)}
+                    >
+                      <div className="grow">
+                        <div className="nt" style={{ color: "var(--teal)" }}>＋ 新建租户</div>
+                      </div>
+                    </button>
+                  ) : (
+                    <div style={{ padding: "12px 16px" }}>
+                      {tenantError ? (
+                        <div className="st failed" style={{ marginBottom: 8, padding: "6px 10px" }}>
+                          {tenantError}
+                        </div>
+                      ) : null}
+                      <input
+                        value={newTenantName}
+                        onChange={(event) => setNewTenantName(event.target.value)}
+                        placeholder="租户名称"
+                        style={{
+                          width: "100%",
+                          border: "1px solid var(--line)",
+                          borderRadius: 9,
+                          padding: "8px 10px",
+                          fontSize: 13,
+                          marginBottom: 8,
+                          background: "var(--surface-2)",
+                        }}
+                      />
+                      <select
+                        value={newTenantLocale}
+                        onChange={(event) => setNewTenantLocale(event.target.value)}
+                        className="btn ghost sm"
+                        style={{ width: "100%", marginBottom: 10 }}
+                      >
+                        <option value="en">默认语言：英语</option>
+                        <option value="ar">默认语言：阿语</option>
+                        <option value="ru">默认语言：俄语</option>
+                        <option value="zh">默认语言：中文</option>
+                        <option value="pt">默认语言：葡语</option>
+                        <option value="de">默认语言：德语</option>
+                        <option value="fr">默认语言：法语</option>
+                      </select>
+                      <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
+                        <button
+                          type="button"
+                          className="btn ghost sm"
+                          onClick={() => {
+                            setShowCreateTenant(false);
+                            setTenantError(null);
+                          }}
+                        >
+                          取消
+                        </button>
+                        <button
+                          type="button"
+                          className="btn primary sm"
+                          disabled={creatingTenant || !newTenantName.trim()}
+                          onClick={() => void createTenant()}
+                        >
+                          {creatingTenant ? "创建中…" : "创建"}
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              ) : null}
+            </div>
             <span className="pill">
               <span className="dot local" />
               数据本地 · 隐私在线

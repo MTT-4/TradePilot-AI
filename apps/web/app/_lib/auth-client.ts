@@ -27,8 +27,35 @@ export class LoginRequiredError extends Error {
   }
 }
 
+const PREFERRED_TENANT_KEY = "tp.tenantId";
+
+export function getPreferredTenantId(): string | null {
+  if (typeof window === "undefined") {
+    return null;
+  }
+  try {
+    return window.localStorage.getItem(PREFERRED_TENANT_KEY);
+  } catch {
+    return null;
+  }
+}
+
+export function setPreferredTenantId(tenantId: string) {
+  if (typeof window === "undefined") {
+    return;
+  }
+  try {
+    window.localStorage.setItem(PREFERRED_TENANT_KEY, tenantId);
+  } catch {
+    // localStorage 不可用时忽略，回退到服务端默认租户
+  }
+}
+
 export async function fetchCurrentMe() {
-  const response = await fetch("/api/me");
+  const preferred = getPreferredTenantId();
+  const response = await fetch("/api/me", {
+    headers: preferred ? { "X-Tenant-Id": preferred } : undefined,
+  });
 
   if (response.status === 401) {
     throw new LoginRequiredError();

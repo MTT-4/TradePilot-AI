@@ -85,7 +85,7 @@ const NAV_GROUPS: NavGroup[] = [
         icon: icon(<path d="M4 5h4v14H4zM10 5h4v14h-4zM16 5h4v14h-4z" />),
       },
       {
-        href: "/hitl",
+        href: "/replies",
         label: "AI 首响审批",
         icon: icon(<path d="M4 4h16v12H5.2L4 18z" />),
       },
@@ -139,6 +139,7 @@ const TITLE_BY_PREFIX: Array<[string, string]> = [
   ["/design", "AI 设计 / 内容包"],
   ["/content-packs", "内容包"],
   ["/crm", "CRM 管道"],
+  ["/replies", "AI 首响审批"],
   ["/hitl", "人工把关 · 审批中心"],
   ["/notifications", "通知中心"],
   ["/publish-checklist", "发布清单"],

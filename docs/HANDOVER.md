@@ -56,6 +56,30 @@ a8b03ea fix: harden ci and settings operations
 2. **设置页下一步可补**：如果要继续深挖，优先补更细粒度的策略说明、变更历史和回滚，而不是继续堆只读摘要。
 3. **如果要继续做平台升级**：下一轮可以评估 Node 22 之外的依赖升级，但先以当前 CI 全绿为基线，不要在同一提交里混入无关重构。
 
+### 4.1 新需求：建站/设计 引用素材与品牌包（需 DB 环境）
+
+底座已具备：对象存储 `apps/web/server/storage/object-store.ts`（`putTenantObject` 等）、品牌包
+`brandKit` 模型 + `apps/web/server/settings/service.ts`、知识库 `sensitivity`(PUBLIC/INTERNAL_ONLY)。
+
+1. 新增 `ContentAsset` 模型（tenantId、objectKey、mimeType、fileName、kind、createdByUserId），写迁移。
+   租户隔离是排除式（`server/db/tenant-models.ts`），新模型只要带 `tenantId` 即自动纳入。
+2. 上传接口 `POST /api/assets`（multipart，ADMIN/operator），用 `putTenantObject` 落库；
+   前端在 `sites/[id]/chat` 和 `design` 加"上传本地素材"区（复用 `.drop` 样式）。
+3. 生成请求（`createSiteGenerationRequest` / `createContentPackGenerationRequest`）入参增加
+   `assetIds[]`、`knowledgeDocumentIds[]`、`referenceBrandKit: boolean`。
+4. **隐私红线（务必）**：进入对外内容的知识库引用必须过滤 `INTERNAL_ONLY`（参考 model-gateway 的
+   `buildKnowledgeContext(..., allowInternalOnly=false)`）。补测试：传入 internal_only 文档，
+   断言它不进入生成的公开内容。
+
+### 4.2 新需求：按国家习惯/节假日推荐推广时间
+
+纯逻辑核心**已完成**：`apps/web/server/scheduling/promotion-timing.ts`
+（`recommendPromotionTiming`，含 t8.1 单测）。待接线：
+
+1. 新增 `GET /api/scheduling/promotion-timing?country=XX`（带租户鉴权），调用上面的函数。
+2. 在内容包 / 发布清单页展示"建议投放时段 + 节假日提醒"，并把建议时间预填到发布清单的"计划时间"。
+3. 节假日为起步数据、需按年核对；可在 `/settings` 增加运营维护各国节假日的入口（后续可选）。
+
 ## 5. 开发约定
 
 - 复用 `globals.css` 的组件类，避免重复造样式；新增通用样式也加到 globals.css。

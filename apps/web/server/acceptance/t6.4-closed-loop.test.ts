@@ -24,6 +24,18 @@ import {
 
 const prisma = getPrismaClient();
 
+const ACCEPTANCE_CONTENT_TEMPLATES = [
+  { platform: Platform.LINKEDIN, mediaType: MediaType.IMAGE, ratio: "1.91:1" },
+  { platform: Platform.FACEBOOK, mediaType: MediaType.IMAGE, ratio: "1:1" },
+  { platform: Platform.INSTAGRAM, mediaType: MediaType.IMAGE, ratio: "4:5" },
+  { platform: Platform.REELS, mediaType: MediaType.VIDEO_SCRIPT, ratio: "9:16" },
+  { platform: Platform.TIKTOK, mediaType: MediaType.VIDEO_SCRIPT, ratio: "9:16" },
+  { platform: Platform.YOUTUBE, mediaType: MediaType.VIDEO_SCRIPT, ratio: "16:9" },
+  { platform: Platform.SHORTS, mediaType: MediaType.VIDEO_SCRIPT, ratio: "9:16" },
+  { platform: Platform.VK_CLIPS, mediaType: MediaType.VIDEO_SCRIPT, ratio: "9:16" },
+  { platform: Platform.RUTUBE, mediaType: MediaType.VIDEO_SCRIPT, ratio: "16:9" },
+] as const;
+
 let ownerContext: TenantContext;
 let salesContext: TenantContext;
 let tenantAId = "";
@@ -31,7 +43,7 @@ let tenantBId = "";
 let tenantSlug = "";
 let seedLeadId = "";
 let seedSiteTemplate: Awaited<ReturnType<typeof loadSeedSiteTemplate>>;
-let seedContentTemplates: Awaited<ReturnType<typeof loadSeedContentTemplates>>;
+let seedCampaignId: string | null = null;
 
 function jsonResponse(payload: unknown, status = 200) {
   return new Response(JSON.stringify(payload), {
@@ -184,51 +196,6 @@ async function loadSeedSiteTemplate() {
   return site;
 }
 
-async function loadSeedContentTemplates() {
-  const contentPacks = await prisma.contentPack.findMany({
-    where: {
-      tenant: {
-        slug: "shenghai-machinery",
-      },
-    },
-    select: {
-      campaignId: true,
-      items: {
-        orderBy: {
-          createdAt: "asc",
-        },
-        select: {
-          platform: true,
-          locale: true,
-          mediaType: true,
-          title: true,
-          body: true,
-          spec: true,
-          plannedAt: true,
-          trackingLink: {
-            select: {
-              utmSource: true,
-              utmMedium: true,
-              utmCampaign: true,
-              utmContent: true,
-            },
-          },
-        },
-      },
-    },
-    orderBy: {
-      createdAt: "asc",
-    },
-  });
-  const contentPack = contentPacks.find((item) => item.items.length === 9);
-
-  if (!contentPack || contentPack.items.length !== 9) {
-    throw new Error("Seeded content pack template missing for T6.4 acceptance test.");
-  }
-
-  return contentPack;
-}
-
 beforeAll(async () => {
   process.env.OPENAI_BASE_URL = "https://mock.openai.test/v1";
   process.env.OPENAI_MODEL = "gpt-4.1-mini";
@@ -245,7 +212,7 @@ beforeAll(async () => {
     tenantB,
     seedLead,
     siteTemplate,
-    contentTemplates,
+    seedCampaign,
   ] = await Promise.all([
     prisma.membership.findFirst({
       where: {
@@ -310,7 +277,19 @@ beforeAll(async () => {
       },
     }),
     loadSeedSiteTemplate(),
-    loadSeedContentTemplates(),
+    prisma.campaign.findFirst({
+      where: {
+        tenant: {
+          slug: "shenghai-machinery",
+        },
+      },
+      orderBy: {
+        createdAt: "asc",
+      },
+      select: {
+        id: true,
+      },
+    }),
   ]);
 
   if (!ownerMembership || !salesMembership || !tenantA || !tenantB || !seedLead) {
@@ -324,7 +303,7 @@ beforeAll(async () => {
   tenantSlug = tenantA.slug;
   seedLeadId = seedLead.id;
   seedSiteTemplate = siteTemplate;
-  seedContentTemplates = contentTemplates;
+  seedCampaignId = seedCampaign?.id ?? null;
 });
 
 describe("T6.4 four-role closed-loop acceptance", () => {
@@ -540,7 +519,7 @@ describe("T6.4 four-role closed-loop acceptance", () => {
     const contentPack = await prisma.contentPack.create({
       data: {
         tenantId: ownerContext.tenantId,
-        campaignId: seedContentTemplates.campaignId,
+        campaignId: seedCampaignId,
         createdByUserId: ownerContext.userId,
         title: `Middle East closed loop ${tag}`,
         topic: "Middle East distributor acquisition",
@@ -562,21 +541,24 @@ describe("T6.4 four-role closed-loop acceptance", () => {
       trackingLinkId: string;
     }> = [];
 
-    for (const [index, template] of seedContentTemplates.items.entries()) {
+    for (const [index, template] of ACCEPTANCE_CONTENT_TEMPLATES.entries()) {
       const createdItem = await prisma.contentItem.create({
         data: {
           tenantId: ownerContext.tenantId,
           contentPackId: contentPack.id,
           ownerUserId: salesContext.userId,
           platform: template.platform,
-          locale: template.locale,
+          locale: "EN",
           mediaType: template.mediaType,
-          title: `${template.title ?? template.platform.toLowerCase()} ${tag}`,
-          body: `${template.body}\nAcceptance run ${tag}.`,
-          spec: template.spec as Prisma.InputJsonValue,
+          title: `${template.platform.toLowerCase()} distributor content ${tag}`,
+          body: `Acceptance content item ${index + 1} for ${template.platform}.\nAcceptance run ${tag}.`,
+          spec: {
+            ratio: template.ratio,
+            exportChecklist: true,
+          } as Prisma.InputJsonValue,
           publishStatus: index === 0 ? PublishStatus.PUBLISHED : PublishStatus.PENDING,
           publishedAt: index === 0 ? new Date() : null,
-          plannedAt: template.plannedAt,
+          plannedAt: new Date(Date.now() + index * 3_600_000),
         },
         select: {
           id: true,
@@ -588,15 +570,15 @@ describe("T6.4 four-role closed-loop acceptance", () => {
       const tracking = await prisma.trackingLink.create({
         data: {
           tenantId: ownerContext.tenantId,
-          campaignId: seedContentTemplates.campaignId,
+          campaignId: seedCampaignId,
           contentItemId: createdItem.id,
           platform: template.platform,
           slug: `${tag}-${template.platform.toLowerCase()}-${index + 1}`,
           targetUrl: `https://tradepilot.local/${siteProject.slug}`,
-          utmSource: template.trackingLink?.utmSource ?? template.platform.toLowerCase(),
-          utmMedium: template.trackingLink?.utmMedium ?? "social",
-          utmCampaign: template.trackingLink?.utmCampaign ?? `campaign-${tag}`,
-          utmContent: template.trackingLink?.utmContent ?? `item-${index + 1}`,
+          utmSource: template.platform.toLowerCase(),
+          utmMedium: "social",
+          utmCampaign: `campaign-${tag}`,
+          utmContent: `item-${index + 1}`,
         },
         select: {
           id: true,

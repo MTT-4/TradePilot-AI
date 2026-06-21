@@ -136,15 +136,22 @@
 
 V1.1 的 P0/P1 在本仓库基本已完成，因此分期改为以下五个"补缺"阶段（Gap 阶段）。**严格一次只做一个阶段。**
 
-| 阶段 | 目标 | 主要动作 |
-|---|---|---|
-| G1 闭环补全 | 把已有 KB→询盘→识别→回复→CRM 闭环的 Skill 输出补成 V1.1 Schema，对齐字段与 HITL | Skill 1/2/3/5/8 补输出，统一 Skill 契约 |
-| G2 销售增强 | 报价、跟进、多语言、模板 | Skill 4/6/7，Tool 8/9/11/12 |
-| G3 渠道与监控 | Gmail/WhatsApp/n8n/Langfuse/Sentry/PostHog/订单 | Skill 9，Tool 13–19 |
-| G4 情报与合规 | 市场/展会/合规/线索/竞品 | Skill 10–14，Tool 20–26 |
-| G5 商业化 | 计费/CRM 深度/管理分析/审计导出 | Skill 15–19，Tool 27/28/31/32/33 |
+> **精简结论已采纳（见 `docs/skills/技能与工具_精简决策表.md`）。** 范围按下表收敛：
+> 砍掉 9 个平台已有的重复 Tool、3 个窄/模糊 Skill（lead_generation、exhibition_lead、account_growth_advisor）；
+> 合并 2 个（multilingual_localization→first_response_draft；sales_funnel_analysis→dashboard）；
+> **全部 13 个第三方连接器整体砍掉、移出路线图**（gmail/whatsapp/n8n/langfuse/sentry/posthog/
+> email_delivery/hunter/apollo/importyeti/similarweb/stripe/hubspot）；只做本地、不外发的项。
+> 另：凡需改动现有文件的增强（customer_scoring、first_response_draft）列为"需批准"，默认不动现有架构。
 
-每阶段统一约束：外部服务必须有 mock fallback；API Key 走环境变量、禁止硬编码；价格/交期/认证/合规结论必须经 HITL 人工确认；不破坏现有登录、控制台、KB、建站、上传。
+| 阶段 | 目标 | 要做（精简后） | 不做（砍） |
+|---|---|---|---|
+| G1 本地闭环 | 询盘识别→知识引用→CRM 归档（纯新增文件） | inquiry_detection、knowledge_reference、crm_auto_entry（✅已完成） | customer_scoring/first_response_draft 增强=需批准 |
+| G2 销售增强 | 报价、跟进、模板（全本地） | quotation_assistant、follow_up_scheduler；Tool：quotation_rule、currency_rate、follow_up_task、email_template | multilingual 合并进回复；不接外部 |
+| G3 订单沟通 | 订单/交期话术（本地） | order_delivery_communication | Gmail/WhatsApp/n8n/Langfuse/Sentry/PostHog/email_delivery 全部砍 |
+| G4 合规（本地） | 合规清单与认证规则（本地） | compliance_risk；Tool：hs_code、certification_rule | hunter/apollo/importyeti/similarweb 砍；lead_generation/exhibition 砍；market/competitor 无源搁置 |
+| G5 企业级（扩展现有） | 计费/审计/导出（扩展不新建） | 扩展 usage、data-requests、export | stripe/hubspot 砍；account_growth_advisor 砍；漏斗并入 dashboard |
+
+每阶段统一约束：只新增文件、不改现有架构（需改现有文件的单独批准）；**不接任何第三方外部服务、不外发数据**；价格/交期/认证/合规结论必须经 HITL；不破坏现有登录、控制台、KB、建站、上传。
 
 ---
 
@@ -159,24 +166,22 @@ cd ~/ai-projects/tradepilot-ai
 mkdir -p docs/codex_tasks
 
 cat > docs/codex_tasks/G1_loop_completion.md <<'EOF'
-# G1：询盘闭环 Skill 契约补全
+# G1：本地询盘闭环（纯新增文件，不改现有架构）
 
-背景：仓库已实现 KB、leads、replies、crm、model-gateway。不要重建这些，只补 Skill 输出契约。
+背景：仓库已实现 KB、leads、replies、crm、model-gateway。只新增文件、复用现有服务，禁止修改现有文件。
 
-要求：
-1. 在 apps/web/server/leads/ 新增 inquiry-detection.ts，输出结构化字段（language/country/company_name/
-   contact_name/product_interest/specifications/quantity/intent_type/asks_for_*/urgency/quality_signal/
-   risk_flags/summary_zh），供 replies 与 crm 复用。复用现有 scoring.ts 的关键词与国家信号，不要重写。
-2. 扩展 customer_scoring：在 leads/scoring 输出 score_reasons 数组，解释加减分原因。
-3. 扩展 first_response_draft（server/replies/service.ts）输出 questions_to_confirm / uncertain_points /
-   knowledge_sources / next_action 字段，禁止编造认证/价格/交期。
-4. knowledge_reference（server/kb）补 missing_information 与来源高亮字段。
-5. crm_auto_entry：从询盘识别结果自动结构化写入 crm，经现有 tenant-prisma。
-6. 所有自动动作仍走 HITL 审批；隐私数据只走本地 Qwen（model-gateway 已支持）。
-7. 新建 docs/skills/ 目录，为 Skill 1/2/3/5/8 各写 SKILL.md + input_schema.json + output_schema.json +
-   examples.json（作为契约文档，不重复实现已有逻辑）。
-8. 不破坏现有测试。完成后运行：npm run lint && npm run typecheck && npm run test
-9. 输出：新增/修改文件清单、Schema 对照、测试结果、剩余阻塞点。
+已完成（本仓库已落地，typecheck/eslint 通过，未改任何现有文件）：
+- inquiry_detection：server/leads/inquiry-detection.ts + app/api/skills/inquiry-detection。
+  结构化结果存 Inquiry.rawPayload.analysis；sensitivity=INTERNAL_ONLY 强制本地 Qwen。
+- knowledge_reference：server/kb/knowledge-reference.ts + 路由。复用 hybridSearchKnowledgeChunks，补缺失提醒。
+- crm_auto_entry：server/crm/crm-auto-entry.ts + 路由。复用 createCrmActivity，回填 Lead、写跟进 note。
+
+需批准后才做（会改现有文件，默认不动）：
+- customer_scoring 增强：改 leads/scoring.ts（现状已是规则打分 + Lead.scoreReason 单字符串，够用）。
+- first_response_draft 增强：改 replies/service.ts，把分析字段写进 Reply.citations.meta。
+
+契约文档见 docs/skills/（已按真实 schema 校正）。
+完成后运行：npm run lint && npm run typecheck（test 需本地 DB + seed）。
 EOF
 
 codex "$(cat docs/codex_tasks/G1_loop_completion.md)"
@@ -187,105 +192,103 @@ codex "$(cat docs/codex_tasks/G1_loop_completion.md)"
 ```bash
 cd ~/ai-projects/tradepilot-ai
 cat > docs/codex_tasks/G2_sales_enhancement.md <<'EOF'
-# G2：报价 / 跟进 / 多语言 / 模板
+# G2：报价 / 跟进 / 模板（全本地，新增文件优先）
 
-前提：G1 已完成。
+前提：G1 已完成。范围已精简：多语言不单列、合并进回复生成；不接任何外部服务。
 
-要求：
-1. 新建 server/quotation/{service.ts,rules.ts} 与 app/api/quotation/route.ts：
-   报价助手 + 报价规则工具（FOB/CIF/EXW、MOQ、阶梯价、样品价、报价有效期、币种）。
-   报价只生成"建议"，必须显示"需人工确认"并经 HITL，禁止 AI 自动承诺价格。
-2. 新建 follow_up_scheduler：复用 server/scheduling 与 server/jobs，生成第 1/3/7/14/30 天可编辑跟进任务，
-   不自动发送。新增 follow_up_task_tool（待办/提醒模型）。
-3. multilingual_localization：抽成独立模块走 model-gateway，避免机翻腔；隐私内容仍走本地 Qwen。
-4. 新建 server/templates/service.ts（email_template_tool）：开发信/跟进信/报价信模板。
-5. 新建 currency_rate_tool：mock 起步，环境变量预留真实汇率源。
-6. 为以上各 Skill/Tool 在 docs/skills、docs/tools 写契约文档。
-7. 复用现有 UI 组件类与 app-shell，不重做 UI。
-8. 完成后：npm run lint && npm run typecheck && npm run test
-9. 输出：新增文件、mock 清单、HITL 接入点、测试结果。
+要做：
+1. 新建 server/quotation/{service.ts,rules.ts} 与 app/api/skills/quotation/route.ts：
+   报价助手 + 报价规则（FOB/CIF/EXW、MOQ、阶梯价、样品价、报价有效期、币种）。
+   报价只生成"建议"，必须标"需人工确认"并经现有 HITL，禁止 AI 自动承诺价格。
+2. 新建 follow_up_scheduler（新文件）：复用 server/scheduling 与 server/jobs，生成第 1/3/7/14/30 天
+   可编辑跟进任务，不自动发送。配 follow_up_task（待办/提醒）。
+3. 新建 server/templates/service.ts（email_template）：开发信/跟进信/报价信模板。
+4. 新建 currency_rate：mock 起步，环境变量预留真实汇率源。
+5. 优先新增文件、复用现有 UI 组件类与 app-shell，不重做 UI。
+
+不做（已精简）：
+- multilingual_localization 不单列（语言本地化并入 first_response_draft，需批准时再做）。
+- customer_scoring 沿用现有规则打分，不重写。
+
+完成后：npm run lint && npm run typecheck。输出：新增文件、mock 清单、HITL 接入点。
 EOF
 
 codex "$(cat docs/codex_tasks/G2_sales_enhancement.md)"
 ```
 
-### 5.3 G3 — 渠道接入与监控
+### 5.3 G3 — 订单沟通（本地）；渠道连接器全部缓做
 
 ```bash
 cd ~/ai-projects/tradepilot-ai
-cat > docs/codex_tasks/G3_channels_monitoring.md <<'EOF'
-# G3：Gmail / WhatsApp / n8n / Langfuse / Sentry / PostHog / 订单沟通
+cat > docs/codex_tasks/G3_order_communication.md <<'EOF'
+# G3：订单与交期沟通（本地，新增文件）
 
-前提：G1、G2 稳定。
+前提：G1、G2 稳定。范围已精简：本阶段只做本地的订单沟通话术；所有第三方渠道已砍。
 
-要求：
-1. 在 server/ 下新增适配器，全部支持 mock 模式 + 环境变量，禁止硬编码 API Key：
-   gmail_inbox_tool（复用现有 inbound-email 抽象，只读+草稿，不自动发）、
-   whatsapp_message_tool（只导入+建议）、n8n_workflow_tool（webhook 预留）、
-   langfuse_trace_tool（挂到 model-gateway，记录 prompt/输出/来源/评估）、
-   sentry_error_tool（前端白屏+API 失败+上传失败+登录报错）、
-   posthog_analytics_tool（复用现有 tracking，补关键事件）、
-   email_delivery_tool（Resend/Mailgun，仅草稿发送测试，不群发）。
-2. 新建 order_delivery_communication Skill：PI/付款提醒/生产进度/发货/售后/补货，禁止 AI 承诺交期。
-3. 所有外部工具无 Key 时必须 mock fallback，不得导致崩溃。
-4. 隐私数据不得发往未配置的第三方。
-5. 完成后：npm run lint && npm run typecheck && npm run test
-6. 输出：环境变量清单、mock 测试方式、风险点。
+要做：
+1. 新建 order_delivery_communication（新文件）：PI/付款提醒/生产进度/发货/售后/补货沟通话术，
+   走 model-gateway 本地路由，禁止 AI 承诺交期，输出可编辑草稿、不自动发。
+
+已砍（移出路线图，不做）：
+- gmail_inbox、whatsapp_message、n8n_workflow、langfuse_trace、sentry_error、
+  posthog_analytics、email_delivery。如未来确需，再单独立项重新评估。
+
+完成后：npm run lint && npm run typecheck。
 EOF
 
-codex "$(cat docs/codex_tasks/G3_channels_monitoring.md)"
+codex "$(cat docs/codex_tasks/G3_order_communication.md)"
 ```
 
-### 5.4 G4 — 市场情报与合规
+### 5.4 G4 — 合规（本地）；情报/线索砍或缓
 
 ```bash
 cd ~/ai-projects/tradepilot-ai
-cat > docs/codex_tasks/G4_intelligence_compliance.md <<'EOF'
-# G4：市场情报 / 展会 / 合规 / 线索 / 竞品
+cat > docs/codex_tasks/G4_compliance_local.md <<'EOF'
+# G4：合规与认证规则（本地，新增文件）
 
-前提：G1-G3 稳定。
+前提：G1-G3 稳定。范围已精简。
 
-要求：
-1. 新建 server/intelligence/{service,exhibition,lead-gen,competitor,growth}.ts 与
-   server/compliance/{service,rules}.ts，对应 Skill 10-14。
-2. 新建外部适配器（全部 mock 起步 + 环境变量）：hunter_lead_tool、apollo_enrichment_tool、
-   importyeti_research_tool、similarweb_research_tool、customs_data_tool、hs_code_tool、
-   certification_rule_tool。
-3. 市场情报/竞品输出必须带 source 字段与 confidence 字段，仅供参考。
-4. 合规/认证输出必须带"需人工确认 / 需专业机构确认"。
-5. 线索生成禁止自动群发、禁止绕过平台规则；不得把第三方付费数据硬编码。
-6. 增加状态页入口，不重做整个 UI。
-7. 完成后：npm run lint && npm run typecheck && npm run test
-8. 输出：mock 数据、环境变量清单、风险提示。
+要做：
+1. 新建 server/compliance/{service.ts,rules.ts}（compliance_risk + certification_rule）：
+   CE/RoHS/FCC/FDA 清单与风险提示，本地规则库，输出必须带"需人工确认 / 需专业机构确认"，不作法律意见。
+2. 新建 hs_code（本地规则/候选）：HS Code 候选与出口分类辅助。
+
+砍掉（移出路线图，不做）：
+- lead_generation（群发/ToS 雷区）、exhibition_lead（场景窄）。
+- 第三方数据源 hunter/apollo/importyeti/similarweb 及 customs_data 全部砍（禁止转售/再分发）。
+- market_intelligence、competitor_analysis 失去数据源，搁置（如未来要做须先有合规自有数据）。
+
+完成后：npm run lint && npm run typecheck。
 EOF
 
-codex "$(cat docs/codex_tasks/G4_intelligence_compliance.md)"
+codex "$(cat docs/codex_tasks/G4_compliance_local.md)"
 ```
 
 ### 5.5 G5 — 商业化与企业级
 
 ```bash
 cd ~/ai-projects/tradepilot-ai
-cat > docs/codex_tasks/G5_saas_enterprise.md <<'EOF'
-# G5：计费 / CRM 深度 / 管理分析 / 审计导出
+cat > docs/codex_tasks/G5_enterprise_extend.md <<'EOF'
+# G5：扩展现有的计费/审计/导出 + 本地管理分析
 
-前提：G1-G4 稳定。多租户隔离(tenant-prisma)、RBAC、2FA 已存在，复用不要重建。
+前提：G1-G4 稳定。多租户隔离(tenant-prisma)、RBAC、2FA、usage、data-requests 已存在，复用不要重建。
 
-要求：
-1. 管理层 Skill（复用 dashboard/crm/replies 数据）：sales_funnel_analysis、product_hotspot_analysis、
-   team_performance_analysis、strategy_admin_assistant、account_growth_advisor。
-2. 企业级 Tool：stripe_billing_tool（mock；真实接入用环境变量+webhook 校验+防重复）、
-   hubspot_crm_tool（mock；失败重试+冲突处理）、
-   billing_usage_tool（扩展现有 app/api/usage）、
-   audit_log_tool（扩展 server/data-requests，所有导出/敏感操作写审计）、
-   export_tool（客户/询盘/报价/跟进/知识库导出，参考 content-packs export）。
-3. 权限继续用 server/auth/rbac（owner/admin/sales/viewer）；数据继续按 tenantId 隔离。
-4. 付费功能必须有开关；导出必须写审计日志。
-5. 完成后：npm run lint && npm run typecheck && npm run test
-6. 输出：权限矩阵、环境变量清单、上线前检查清单。
+要做（扩展现有，不新建一套）：
+1. 扩展 billing_usage（基于现有 app/api/usage 与 ModelInvocation）：AI 次数/存储/坐席计量。
+2. 扩展 audit_log（基于现有 server/data-requests）：导出/敏感操作写审计；DataRequest 覆盖 rawPayload。
+3. 扩展 export（参考现有 content-packs export）：客户/询盘/报价/跟进/知识库导出，导出写审计。
+4. 本地管理分析 Skill（复用 dashboard/crm/replies 数据，全本地、低风险）：
+   product_hotspot_analysis、team_performance_analysis、strategy_admin_assistant。
+   sales_funnel_analysis 直接并入现有 dashboard，不单列。
+
+砍掉（移出路线图，不做）：
+- account_growth_advisor（定位模糊）。
+- stripe_billing、hubspot_crm 全部砍（第三方外部服务；计费如需先用本地用量计量起步，不接 Stripe）。
+
+完成后：npm run lint && npm run typecheck。输出：权限矩阵、上线前检查清单。
 EOF
 
-codex "$(cat docs/codex_tasks/G5_saas_enterprise.md)"
+codex "$(cat docs/codex_tasks/G5_enterprise_extend.md)"
 ```
 
 ---

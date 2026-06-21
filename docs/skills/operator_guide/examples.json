@@ -1,0 +1,21 @@
+{
+  "request": {
+    "question": "我想把一个线索从 CRM 推进到首响审批，应该怎么操作？"
+  },
+  "response": {
+    "answer": "先进入 `/crm` 定位线索或询盘，再从线索详情进入 AI 首响起草；草稿生成后到 `/replies` 审阅、编辑并提交发送审批。真正发送仍走审批流，不会自动外发。",
+    "next_actions": [
+      "先在 `/crm` 找到目标线索或询盘",
+      "从线索详情进入 AI 首响起草",
+      "到 `/replies` 审阅并确认发送审批"
+    ],
+    "suggested_questions": [
+      "如果知识库缺资料，我应该先去哪补？",
+      "报价助手和首响审批分别适合什么时候用？"
+    ],
+    "source_files": [
+      "built_in/operator-handbook",
+      "docs/HANDOVER.md"
+    ]
+  }
+}

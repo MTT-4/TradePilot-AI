@@ -12,6 +12,7 @@
   ],
   "scripts": {
     "dev": "dotenv -e .env -- npm --workspace @tradepilot/web run dev",
+    "dev:local": "bash scripts/run-local-dev.sh",
     "worker:jobs": "dotenv -e .env -- npm --workspace @tradepilot/web run worker:jobs",
     "build": "dotenv -e .env -- npm --workspace @tradepilot/web run build",
     "start": "dotenv -e .env -- npm --workspace @tradepilot/web run start",
@@ -29,7 +30,9 @@
     "prisma:assert-tenant": "node tools/check/assert-tenant-fields.mjs",
     "ops:check-secrets": "node tools/check/assert-nonplaceholder-secrets.mjs",
     "ops:backup-local": "bash tools/ops/backup_local.sh",
-    "ops:restore-local": "bash tools/ops/restore_local.sh"
+    "ops:restore-local": "bash tools/ops/restore_local.sh",
+    "ops:cleanup-orphan-hitl": "dotenv -e .env -- node tools/ops/cleanup_orphan_reply_hitl.mjs",
+    "serve:bge-local": "bash scripts/run-bge-local.sh"
   },
   "dependencies": {
     "@prisma/client": "^6.9.0"

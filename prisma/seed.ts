@@ -655,13 +655,13 @@ async function main() {
     },
   });
 
-  await prisma.reply.create({
+  const seededReply = await prisma.reply.create({
     data: {
       tenantId: tenantA.id,
       inquiryId: inquiryForm.id,
       createdByUserId: salesA.id,
       modelInvocationId: invocation.id,
-      status: "DRAFT",
+      status: "PENDING_APPROVAL",
       route: "LOCAL_QWEN",
       draftText:
         "Thanks for your inquiry. We can share distributor pricing and lead times after confirming your target monthly volume.",
@@ -692,8 +692,9 @@ async function main() {
       type: "REPLY_SEND",
       status: "PENDING",
       entityType: "reply",
-      entityId: inquiryEmail.id,
+      entityId: seededReply.id,
       payload: {
+        replyId: seededReply.id,
         inquiryId: inquiryEmail.id,
       },
     },

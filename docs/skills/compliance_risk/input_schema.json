@@ -1,0 +1,16 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "compliance_risk.input",
+  "type": "object",
+  "required": ["product"],
+  "properties": {
+    "product": { "type": "string", "minLength": 1 },
+    "markets": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "目标市场，如 EU/UK/US；留空则返回通用提示"
+    },
+    "country": { "type": "string", "description": "目标国家，用于制裁筛查提示" }
+  },
+  "additionalProperties": false
+}

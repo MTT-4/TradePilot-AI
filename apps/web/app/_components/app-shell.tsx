@@ -94,6 +94,62 @@ const NAV_GROUPS: NavGroup[] = [
         label: "AI 首响审批",
         icon: icon(<path d="M4 4h16v12H5.2L4 18z" />),
       },
+      {
+        href: "/quotation",
+        label: "报价助手",
+        icon: icon(
+          <>
+            <path d="M6 3h9l3 3v15H6z" />
+            <path d="M15 3v4h4" />
+            <path d="M9 10h6M9 14h6M9 18h4" />
+          </>,
+        ),
+      },
+      {
+        href: "/follow-up",
+        label: "跟进节奏",
+        icon: icon(
+          <>
+            <path d="M12 8v5l3 2" />
+            <circle cx="12" cy="12" r="8" />
+          </>,
+        ),
+      },
+      {
+        href: "/compliance-risk",
+        label: "合规风险",
+        icon: icon(
+          <>
+            <path d="M12 2 4 6v6c0 5 3.5 8 8 10 4.5-2 8-5 8-10V6z" />
+            <path d="M12 8v4" />
+            <path d="M12 16h.01" />
+          </>,
+        ),
+      },
+      {
+        href: "/operator-guide",
+        label: "操作指导",
+        icon: icon(
+          <>
+            <rect x="4" y="3" width="16" height="15" rx="4" />
+            <path d="M12 8v4" />
+            <path d="M8 12h8" />
+            <path d="M6 18h12" />
+          </>,
+        ),
+      },
+      {
+        href: "/tech-assistant",
+        label: "技术问答",
+        icon: icon(
+          <>
+            <path d="M4 19h16" />
+            <path d="M7 15V9" />
+            <path d="M12 15V5" />
+            <path d="M17 15v-3" />
+          </>,
+        ),
+      },
     ],
   },
   {
@@ -167,12 +223,17 @@ const TITLE_BY_PREFIX: Array<[string, string]> = [
   ["/content-packs", "内容包"],
   ["/crm", "CRM 管道"],
   ["/replies", "AI 首响审批"],
+  ["/quotation", "报价助手"],
+  ["/follow-up", "跟进节奏"],
+  ["/compliance-risk", "合规风险"],
   ["/hitl", "人工把关 · 审批中心"],
   ["/notifications", "通知中心"],
   ["/publish-checklist", "发布清单"],
   ["/tracking-links", "追踪链接"],
   ["/jobs", "任务监控"],
   ["/settings", "设置 / 治理"],
+  ["/operator-guide", "操作指导"],
+  ["/tech-assistant", "技术问答"],
 ];
 
 function resolveTitle(pathname: string) {

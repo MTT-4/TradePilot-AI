@@ -1,0 +1,21 @@
+{
+  "type": "object",
+  "required": ["answer", "next_actions", "suggested_questions", "source_files"],
+  "properties": {
+    "answer": {
+      "type": "string"
+    },
+    "next_actions": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "suggested_questions": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "source_files": {
+      "type": "array",
+      "items": { "type": "string" }
+    }
+  }
+}

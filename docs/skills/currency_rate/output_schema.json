@@ -1,0 +1,15 @@
+{
+  "type": "object",
+  "properties": {
+    "from": { "type": "string" },
+    "to": { "type": "string" },
+    "rate": { "type": "number" },
+    "amount": { "type": ["number", "null"] },
+    "converted": { "type": ["number", "null"] },
+    "source": { "type": "string", "enum": ["mock"] },
+    "asOf": { "type": "string" },
+    "disclaimer": { "type": "string" }
+  },
+  "required": ["from", "to", "rate", "amount", "converted", "source", "asOf", "disclaimer"],
+  "additionalProperties": false
+}

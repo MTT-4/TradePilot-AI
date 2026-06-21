@@ -26,6 +26,18 @@ docker compose up -d
 npm run dev
 ```
 
+如果你希望把 Docker、本地 bge-m3、Web dev 一起收口，可以直接执行：
+
+```bash
+npm run dev:local
+```
+
+说明：
+- 这条命令会自动启动 Docker 依赖
+- 如果 `8082` 没在线，会自动拉起本地 `bge-m3`
+- 如果 `8080` 的 Qwen 没在线，只会提示，不会自动代起
+- Web 控制台仍运行在 `http://localhost:3100`
+
 Web 控制台默认运行在 `http://localhost:3100`。
 
 ## llama.cpp 端点示例
@@ -48,6 +60,42 @@ llama-server \
 ```
 
 如果你的 Qwen 变体需要 `mmproj`，在第一条命令里追加 `--mmproj /path/to/mmproj.gguf`。
+
+## bge-m3 本地端点补充
+
+如果你本机已经有 `bge-m3.gguf`，可以继续按上面的 `llama-server --embedding` 方式起 `8082`。
+
+如果你本机像当前仓库一样，只有 `~/AI/models/bge-m3` 这种 Hugging Face / ONNX 目录，没有 GGUF 文件，
+可以直接用仓库自带脚本起一个本地 OpenAI-compatible embedding 端点：
+
+```bash
+python3 -m venv tmp/bge-server-venv
+source tmp/bge-server-venv/bin/activate
+python -m pip install --upgrade pip
+python -m pip install numpy onnxruntime tokenizers
+python scripts/bge_m3_local_server.py --host 0.0.0.0 --port 8082
+```
+
+也可以直接用仓库脚本：
+
+```bash
+npm run serve:bge-local
+```
+
+默认读取目录：
+
+```text
+$HOME/AI/models/bge-m3
+```
+
+启动后可用下面两个接口自检：
+
+```bash
+curl http://localhost:8082/health
+curl http://localhost:8082/v1/models
+```
+
+项目里的 `LOCAL_BGE_BASE_URL=http://localhost:8082/v1`、`LOCAL_BGE_MODEL=bge-m3` 可直接复用，不需要改业务代码。
 
 ## 检查命令
 

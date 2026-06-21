@@ -2,6 +2,7 @@ import { PublishStatus } from "@prisma/client";
 import { z } from "zod";
 import { getPrismaClient } from "@/server/db/prisma";
 import type { TenantContext } from "@/server/db/tenant-context";
+import { filterLivePendingHitlTasks } from "@/server/hitl/filter-pending";
 
 export const dashboardRangeSchema = z.enum(["day", "week", "month"]);
 
@@ -101,6 +102,8 @@ export async function getDashboardSummary(params: {
       },
       select: {
         type: true,
+        entityType: true,
+        entityId: true,
       },
     }),
     prisma.inquiry.findMany({
@@ -130,9 +133,14 @@ export async function getDashboardSummary(params: {
       },
     }),
   ]);
+  const visiblePendingHitlTasks = await filterLivePendingHitlTasks({
+    tenantId: params.tenantContext.tenantId,
+    tasks: pendingHitlTasks,
+    replyReader: prisma.reply,
+  });
   const pendingHitl = new Map<string, number>();
 
-  for (const task of pendingHitlTasks) {
+  for (const task of visiblePendingHitlTasks) {
     const key = task.type.toLowerCase();
     pendingHitl.set(key, (pendingHitl.get(key) ?? 0) + 1);
   }

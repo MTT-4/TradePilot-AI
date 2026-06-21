@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Inter, Space_Grotesk, Space_Mono } from "next/font/google";
 import "./globals.css";
 import { AppShell } from "@/app/_components/app-shell";
+import { NextDevtoolsZh } from "@/app/_components/next-devtools-zh";
 
 const spaceGrotesk = Space_Grotesk({
   variable: "--font-space-grotesk",
@@ -37,6 +38,7 @@ export default function RootLayout({
       className={`${spaceGrotesk.variable} ${inter.variable} ${spaceMono.variable} h-full antialiased`}
     >
       <body className="min-h-full">
+        <NextDevtoolsZh />
         <AppShell>{children}</AppShell>
       </body>
     </html>

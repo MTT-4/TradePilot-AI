@@ -1,0 +1,26 @@
+{
+  "type": "object",
+  "properties": {
+    "items": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "string" },
+          "action": { "type": "string" },
+          "entityType": { "type": "string" },
+          "entityId": { "type": "string" },
+          "actorUserId": {
+            "type": ["string", "null"]
+          },
+          "metadata": {},
+          "createdAt": { "type": "string" }
+        },
+        "required": ["id", "action", "entityType", "entityId", "actorUserId", "metadata", "createdAt"],
+        "additionalProperties": false
+      }
+    }
+  },
+  "required": ["items"],
+  "additionalProperties": false
+}

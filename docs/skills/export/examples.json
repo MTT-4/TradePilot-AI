@@ -1,0 +1,20 @@
+{
+  "request": {
+    "type": "leads",
+    "limit": 100
+  },
+  "response": {
+    "type": "leads",
+    "count": 2,
+    "rows": [
+      {
+        "id": "lead_1",
+        "company": "Acme GmbH",
+        "country": "DE",
+        "status": "new",
+        "score": "A",
+        "createdAt": "2026-06-21T08:00:00.000Z"
+      }
+    ]
+  }
+}

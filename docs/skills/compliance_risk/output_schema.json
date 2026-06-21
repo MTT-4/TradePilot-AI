@@ -1,0 +1,42 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "compliance_risk.output",
+  "type": "object",
+  "required": ["product", "required_certifications", "requires_expert_confirmation", "disclaimer", "rule_version"],
+  "properties": {
+    "product": { "type": "string" },
+    "markets": { "type": "array", "items": { "type": "string" } },
+    "required_certifications": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "code": { "type": "string" },
+          "name": { "type": "string" },
+          "markets": { "type": "array", "items": { "type": "string" } },
+          "note": { "type": "string" }
+        }
+      }
+    },
+    "hs_code_candidates": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": { "code": { "type": "string" }, "description": { "type": "string" } }
+      }
+    },
+    "country_risk": {
+      "type": "object",
+      "properties": {
+        "country": { "type": "string" },
+        "needs_screening": { "type": "boolean" },
+        "note": { "type": "string" }
+      }
+    },
+    "labeling_notes": { "type": "array", "items": { "type": "string" } },
+    "requires_expert_confirmation": { "const": true },
+    "rule_version": { "type": "string" },
+    "disclaimer": { "type": "string" }
+  },
+  "additionalProperties": false
+}

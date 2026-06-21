@@ -1,0 +1,18 @@
+{
+  "request": {
+    "currency": "USD",
+    "validityDays": 15,
+    "defaultIncoterm": "FOB",
+    "marginPercent": 18,
+    "minMarginPercent": 12,
+    "moq": 300,
+    "tiers": [
+      {
+        "minQty": 1000,
+        "discountPercent": 3
+      }
+    ],
+    "paymentTerms": "30% T/T deposit, 70% balance before shipment.",
+    "notes": "FOB Shenzhen only."
+  }
+}

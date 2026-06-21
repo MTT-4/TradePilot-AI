@@ -1,0 +1,22 @@
+{
+  "response": {
+    "total_invocations": 42,
+    "total_tokens_input": 18200,
+    "total_tokens_output": 6900,
+    "total_cost_usd": 0,
+    "by_route": [
+      {
+        "route": "local_qwen",
+        "count": 26,
+        "tokens_input": 12000,
+        "tokens_output": 5100
+      }
+    ],
+    "by_task": [
+      {
+        "task": "classify",
+        "count": 18
+      }
+    ]
+  }
+}

@@ -1,0 +1,15 @@
+[
+  {
+    "input": { "inquiryId": "inq_123", "persist": false },
+    "output_excerpt": {
+      "persisted": false,
+      "steps": [
+        { "dayOffset": 1, "channel": "email", "status": "planned" },
+        { "dayOffset": 3, "channel": "email", "status": "planned" },
+        { "dayOffset": 7, "channel": "email", "status": "planned" },
+        { "dayOffset": 14, "channel": "email", "status": "planned" },
+        { "dayOffset": 30, "channel": "email", "status": "planned" }
+      ]
+    }
+  }
+]

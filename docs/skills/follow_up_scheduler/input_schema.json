@@ -1,0 +1,17 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "follow_up_scheduler.input",
+  "type": "object",
+  "properties": {
+    "leadId": { "type": "string" },
+    "inquiryId": { "type": "string", "description": "leadId 缺省时用它解析线索" },
+    "offsets": {
+      "type": "array",
+      "items": { "type": "integer", "minimum": 1 },
+      "description": "跟进天数偏移，默认 [1,3,7,14,30]"
+    },
+    "persist": { "type": "boolean", "description": "true 时落地为 CrmActivity 跟进任务" },
+    "startDate": { "type": "string", "description": "计划起算日，默认今天" }
+  },
+  "additionalProperties": false
+}

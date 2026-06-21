@@ -1,0 +1,15 @@
+{
+  "request": {
+    "q": "led panel light"
+  },
+  "response": {
+    "query": "led panel light",
+    "candidates": [
+      {
+        "code": "9405",
+        "description": "Luminaires and lighting fittings"
+      }
+    ],
+    "disclaimer": "以上为参考性提示，规则库可能过期，最终合规结论须由专业机构/认证实验室或法务确认。本系统不提供法律意见。"
+  }
+}

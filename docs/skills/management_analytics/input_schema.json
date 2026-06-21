@@ -1,0 +1,10 @@
+{
+  "type": "object",
+  "properties": {
+    "report": {
+      "type": "string",
+      "enum": ["funnel", "hotspot", "team"]
+    }
+  },
+  "additionalProperties": false
+}

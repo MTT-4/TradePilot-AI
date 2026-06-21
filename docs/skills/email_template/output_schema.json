@@ -1,0 +1,21 @@
+{
+  "type": "object",
+  "properties": {
+    "templates": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "string" },
+          "name": { "type": "string" },
+          "subject": { "type": "string" },
+          "body": { "type": "string" }
+        },
+        "required": ["id", "name", "subject", "body"],
+        "additionalProperties": false
+      }
+    }
+  },
+  "required": ["templates"],
+  "additionalProperties": false
+}

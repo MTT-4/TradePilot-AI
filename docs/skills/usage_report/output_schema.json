@@ -1,0 +1,37 @@
+{
+  "type": "object",
+  "properties": {
+    "total_invocations": { "type": "integer" },
+    "total_tokens_input": { "type": "integer" },
+    "total_tokens_output": { "type": "integer" },
+    "total_cost_usd": { "type": "number" },
+    "by_route": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "route": { "type": "string" },
+          "count": { "type": "integer" },
+          "tokens_input": { "type": "integer" },
+          "tokens_output": { "type": "integer" }
+        },
+        "required": ["route", "count", "tokens_input", "tokens_output"],
+        "additionalProperties": false
+      }
+    },
+    "by_task": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "task": { "type": "string" },
+          "count": { "type": "integer" }
+        },
+        "required": ["task", "count"],
+        "additionalProperties": false
+      }
+    }
+  },
+  "required": ["total_invocations", "total_tokens_input", "total_tokens_output", "total_cost_usd", "by_route", "by_task"],
+  "additionalProperties": false
+}

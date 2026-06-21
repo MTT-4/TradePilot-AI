@@ -1,0 +1,17 @@
+{
+  "request": {
+    "from": "USD",
+    "to": "EUR",
+    "amount": 100
+  },
+  "response": {
+    "from": "USD",
+    "to": "EUR",
+    "rate": 0.92,
+    "amount": 100,
+    "converted": 92,
+    "source": "mock",
+    "asOf": "2026-06-21",
+    "disclaimer": "参考汇率（mock），非实时成交汇率，报价前须人工确认。"
+  }
+}

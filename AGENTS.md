@@ -19,6 +19,22 @@ TradePilot AI · 本地优先的 AI 外贸营销获客平台（Next.js App Route
 - `npm run lint && npm run typecheck` 必须通过；尽量补/跑相关测试。
 - 提交信息写清改了什么。
 
+## Skills / Tools 扩展约束（新增 skill 或 tool 时必须遵守）
+
+1. **优先只新增文件**：新 skill/tool 放 `apps/web/server/<domain>/` + `apps/web/app/api/skills/<name>/route.ts`，
+   只读写现有表与服务；如必须修改现有文件，先说明改哪些、为什么，等人确认。
+2. **隐私强制本地**：处理客户隐私数据（询盘正文/姓名/电话）时，model-gateway 调用必须传
+   `sensitivity=INTERNAL_ONLY` 走本地 Qwen，绝不外发。
+3. **不接第三方**：Gmail/WhatsApp/Stripe/Hunter/Apollo/ImportYeti/Similarweb/Langfuse/Sentry/PostHog/HubSpot
+   等外部连接器已全部砍掉，禁止引入；保持全本地、零外发。
+4. **AI 不碰钱与承诺**：价格/交期/认证不得 AI 自动生成最终值（关键数字人工填）；
+   合规结论必须标"需专业机构确认"；任何对外发送走现有 HITL。
+5. **统一文件结构**：每个 skill/tool 配 `docs/skills/<name>/`（SKILL.md + input/output schema + examples）。
+6. 完成后 `npm run lint && npm run typecheck`，并输出新增/修改文件清单。
+
+> 详见 `docs/codex_tasks/_指令前缀.md` 与 `docs/codex_tasks/TradePilot_Skill_Tool_落地执行计划_对齐现状版.md`。
+> 现状：G1–G5 本地 skill 已实现（15 个 `/api/skills/*`），无需重做；codex 用于 review、增强或新需求。
+
 ## 参考
 
 - 高保真原型：`docs/00_原始资料/TradePilot_完整高保真UI.html`

@@ -158,3 +158,16 @@ npm run prisma:seed
 npm run dev                   # http://localhost:3100
 # 本地模型端点（llama.cpp）见 README：Qwen :8080 / bge-m3 :8082
 ```
+
+补充一个本地维护命令，处理 reply 已不存在或已不再待审批，但 `REPLY_SEND` HITL 仍残留的脏数据：
+
+```bash
+npm run ops:cleanup-orphan-hitl              # 只预览，不改库
+npm run ops:cleanup-orphan-hitl -- --apply   # 真正清理并记审计日志
+```
+
+需要只检查单租户时：
+
+```bash
+npm run ops:cleanup-orphan-hitl -- --tenant shenghai-machinery
+```

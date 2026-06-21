@@ -1,0 +1,26 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "follow_up_scheduler.output",
+  "type": "object",
+  "required": ["leadId", "persisted", "steps"],
+  "properties": {
+    "leadId": { "type": "string" },
+    "persisted": { "type": "boolean" },
+    "steps": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["dayOffset", "dueDate", "channel", "action", "status"],
+        "properties": {
+          "dayOffset": { "type": "integer" },
+          "dueDate": { "type": "string" },
+          "channel": { "type": "string", "enum": ["email"] },
+          "action": { "type": "string" },
+          "status": { "type": "string", "enum": ["planned"] }
+        }
+      }
+    },
+    "note": { "type": "string" }
+  },
+  "additionalProperties": false
+}

@@ -50,13 +50,25 @@ type LeadScoringInput = {
   inquiryTexts: string[];
 };
 
+type LeadScoreReasonImpact = "positive" | "negative" | "neutral";
+
+type LeadScoreReason = {
+  factor: string;
+  impact: LeadScoreReasonImpact;
+  detail: string;
+};
+
 function containsAny(haystack: string, needles: string[]) {
   return needles.some((needle) => haystack.includes(needle));
 }
 
+function formatLeadScoreReason(reason: LeadScoreReason) {
+  return `[${reason.factor}/${reason.impact}] ${reason.detail}`;
+}
+
 export function evaluateLeadScore(input: LeadScoringInput) {
   const joinedInquiry = input.inquiryTexts.join("\n").toLowerCase();
-  const reasons: string[] = [];
+  const reasons: LeadScoreReason[] = [];
   let points = 0;
 
   if (
@@ -64,27 +76,47 @@ export function evaluateLeadScore(input: LeadScoringInput) {
     PRIORITY_COUNTRIES.has(input.country.trim().toLowerCase())
   ) {
     points += 2;
-    reasons.push(`Buyer market matched priority country: ${input.country.trim()}.`);
+    reasons.push({
+      factor: "country",
+      impact: "positive",
+      detail: `Buyer market matched priority country: ${input.country.trim()}.`,
+    });
   }
 
   if (input.phone?.trim() || input.whatsapp?.trim()) {
     points += 2;
-    reasons.push("Buyer left a direct phone or WhatsApp contact.");
+    reasons.push({
+      factor: "contact",
+      impact: "positive",
+      detail: "Buyer left a direct phone or WhatsApp contact.",
+    });
   }
 
   if (containsAny(joinedInquiry, VOLUME_KEYWORDS)) {
     points += 2;
-    reasons.push("Inquiry mentioned purchasing volume or order scale.");
+    reasons.push({
+      factor: "volume",
+      impact: "positive",
+      detail: "Inquiry mentioned purchasing volume or order scale.",
+    });
   }
 
   if (containsAny(joinedInquiry, HIGH_INTENT_KEYWORDS)) {
     points += 1;
-    reasons.push("Inquiry asked for concrete commercial or delivery details.");
+    reasons.push({
+      factor: "intent",
+      impact: "positive",
+      detail: "Inquiry asked for concrete commercial or delivery details.",
+    });
   }
 
   if (joinedInquiry.length >= 120) {
     points += 1;
-    reasons.push("Inquiry contained enough detail for concrete follow-up.");
+    reasons.push({
+      factor: "detail",
+      impact: "positive",
+      detail: "Inquiry contained enough detail for concrete follow-up.",
+    });
   }
 
   const score =
@@ -96,8 +128,9 @@ export function evaluateLeadScore(input: LeadScoringInput) {
 
   return {
     score,
+    scoreReasons: reasons,
     scoreReason:
-      reasons.join(" ") ||
+      reasons.map(formatLeadScoreReason).join(" ") ||
       "Limited buyer context so the lead stays in the lowest confidence band.",
   };
 }

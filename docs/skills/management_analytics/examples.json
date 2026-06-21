@@ -1,0 +1,24 @@
+{
+  "request": {
+    "report": "funnel"
+  },
+  "response": {
+    "report": "funnel",
+    "data": {
+      "leads_by_status": [
+        {
+          "status": "new",
+          "count": 12
+        }
+      ],
+      "inquiries_total": 40,
+      "replies_total": 18,
+      "opportunities_by_stage": [
+        {
+          "stage": "quoted",
+          "count": 5
+        }
+      ]
+    }
+  }
+}

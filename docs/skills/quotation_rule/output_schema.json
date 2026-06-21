@@ -1,0 +1,27 @@
+{
+  "type": "object",
+  "properties": {
+    "currency": { "type": "string" },
+    "validityDays": { "type": "integer" },
+    "defaultIncoterm": { "type": "string" },
+    "marginPercent": { "type": ["number", "null"] },
+    "minMarginPercent": { "type": ["number", "null"] },
+    "moq": { "type": ["integer", "null"] },
+    "tiers": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "minQty": { "type": "integer" },
+          "discountPercent": { "type": "number" }
+        },
+        "required": ["minQty", "discountPercent"],
+        "additionalProperties": false
+      }
+    },
+    "paymentTerms": { "type": "string" },
+    "notes": { "type": "string" }
+  },
+  "required": ["currency", "validityDays", "defaultIncoterm", "marginPercent", "minMarginPercent", "moq", "tiers", "paymentTerms", "notes"],
+  "additionalProperties": false
+}

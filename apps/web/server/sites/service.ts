@@ -23,6 +23,7 @@ import { getTenantPrisma } from "@/server/db/tenant-prisma";
 import { markContentItemPublished } from "@/server/content-packs/service";
 import { enqueueTenantJob } from "@/server/jobs/service";
 import { approveReplySendTask } from "@/server/replies/service";
+import { filterLivePendingHitlTasks } from "@/server/hitl/filter-pending";
 
 const apiLocaleSchema = z.enum(["en", "ar", "ru", "fr", "de", "pt"]);
 
@@ -2450,9 +2451,17 @@ export async function listHitlTasks(params: {
       resolvedAt: true,
     },
   });
+  const visibleTasks =
+    params.status === "pending"
+      ? await filterLivePendingHitlTasks({
+          tenantId: params.tenantContext.tenantId,
+          tasks,
+          replyReader: tenantPrisma.reply,
+        })
+      : tasks;
 
   return {
-    items: tasks.map((task) => ({
+    items: visibleTasks.map((task) => ({
       id: task.id,
       type: task.type.toLowerCase(),
       status: task.status.toLowerCase(),

@@ -1,0 +1,21 @@
+{
+  "type": "object",
+  "required": ["answer", "source_files", "commands", "caveats"],
+  "properties": {
+    "answer": {
+      "type": "string"
+    },
+    "source_files": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "commands": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "caveats": {
+      "type": "array",
+      "items": { "type": "string" }
+    }
+  }
+}

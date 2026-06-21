@@ -6,13 +6,14 @@ import {
 } from "@prisma/client";
 import { getPrismaClient } from "@/server/db/prisma";
 import type { TenantContext } from "@/server/db/tenant-context";
+import { listNotifications } from "@/server/notifications/service";
 import {
   getReplyDetail,
   rejectReplyDraft,
   requestReplyDraft,
   updateReplyDraft,
 } from "@/server/replies/service";
-import { approveHitlTask } from "@/server/sites/service";
+import { approveHitlTask, listHitlTasks } from "@/server/sites/service";
 import { getDashboardSummary } from "@/server/dashboard/service";
 
 const prisma = getPrismaClient();
@@ -569,5 +570,62 @@ describe("T5.1 replies + T5.3 dashboard", () => {
     expect(task.reason).toBe("Need pricing confirmation first");
     expect(task.rejectedByUserId).toBe(salesContext.userId);
     expect(task.resolvedAt).toBeTruthy();
+  });
+
+  it("filters orphan reply HITL tasks from queues, notifications, and dashboard counts", async () => {
+    const orphanReplyId = `orphan-reply-${Date.now()}`;
+    const orphanTask = await prisma.hitlTask.create({
+      data: {
+        tenantId: salesContext.tenantId,
+        requestedByUserId: salesContext.userId,
+        type: "REPLY_SEND",
+        status: "PENDING",
+        entityType: "reply",
+        entityId: orphanReplyId,
+        payload: {
+          replyId: orphanReplyId,
+        },
+      },
+      select: {
+        id: true,
+      },
+    });
+
+    try {
+      const [hitl, notifications, dashboard] = await Promise.all([
+        listHitlTasks({
+          tenantContext: salesContext,
+          status: "pending",
+        }),
+        listNotifications({
+          tenantContext: salesContext,
+        }),
+        getDashboardSummary({
+          tenantContext: salesContext,
+          range: "week",
+        }),
+      ]);
+
+      expect(hitl.items.some((item) => item.id === orphanTask.id)).toBe(false);
+      expect(
+        notifications.items.some(
+          (item) =>
+            item.type === "hitl_pending" &&
+            item.payload &&
+            typeof item.payload === "object" &&
+            "hitlTaskId" in item.payload &&
+            item.payload.hitlTaskId === orphanTask.id,
+        ),
+      ).toBe(false);
+      expect(
+        dashboard.pendingHitl.find((item) => item.type === "reply_send")?.count ?? 0,
+      ).toBe(hitl.items.filter((item) => item.type === "reply_send").length);
+    } finally {
+      await prisma.hitlTask.delete({
+        where: {
+          id: orphanTask.id,
+        },
+      });
+    }
   });
 });

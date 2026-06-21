@@ -1,0 +1,22 @@
+{
+  "request": {
+    "templates": [
+      {
+        "id": "follow_up",
+        "name": "跟进信",
+        "subject": "Following up on {{product}}",
+        "body": "Dear {{contact}},\n\nJust following up on {{product}}.\n\nBest regards,\n{{sender}}"
+      }
+    ]
+  },
+  "response": {
+    "templates": [
+      {
+        "id": "follow_up",
+        "name": "跟进信",
+        "subject": "Following up on {{product}}",
+        "body": "Dear {{contact}},\n\nJust following up on {{product}}.\n\nBest regards,\n{{sender}}"
+      }
+    ]
+  }
+}

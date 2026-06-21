@@ -1,0 +1,16 @@
+{
+  "type": "object",
+  "properties": {
+    "type": {
+      "type": "string",
+      "enum": ["leads", "inquiries", "activities"]
+    },
+    "limit": {
+      "type": "integer",
+      "minimum": 1,
+      "description": "Optional export size, capped at 5000."
+    }
+  },
+  "required": ["type"],
+  "additionalProperties": false
+}

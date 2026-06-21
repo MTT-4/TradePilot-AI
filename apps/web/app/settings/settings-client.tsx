@@ -1245,7 +1245,7 @@ export function SettingsClient() {
                       }}
                     >
                       <div className="field" style={{ marginBottom: 0 }}>
-                        <label>Brand Kit 名称</label>
+                        <label>品牌套件名称</label>
                         <input
                           type="text"
                           value={brandForm.name}
@@ -1300,7 +1300,7 @@ export function SettingsClient() {
                         />
                       </div>
                       <div className="field" style={{ marginBottom: 0 }}>
-                        <label>Logo 链接</label>
+                        <label>标识 Logo 链接</label>
                         <input
                           type="url"
                           value={brandForm.logoUrl}
@@ -1393,7 +1393,7 @@ export function SettingsClient() {
                       }
                       disabled
                     >
-                      <option value="local_qwen">local_qwen</option>
+                      <option value="local_qwen">本地 Qwen</option>
                     </select>
                   </div>
                   <div className="field">
@@ -1408,7 +1408,7 @@ export function SettingsClient() {
                       }
                       disabled
                     >
-                      <option value="local_bge">local_bge</option>
+                      <option value="local_bge">本地 bge-m3</option>
                     </select>
                   </div>
                   <div className="field">
@@ -1422,8 +1422,8 @@ export function SettingsClient() {
                         }))
                       }
                     >
-                      <option value="google_translate">google_translate</option>
-                      <option value="local_qwen">local_qwen</option>
+                      <option value="google_translate">Google 翻译</option>
+                      <option value="local_qwen">本地 Qwen</option>
                     </select>
                   </div>
                   <div className="field" style={{ marginBottom: 0 }}>
@@ -1437,8 +1437,8 @@ export function SettingsClient() {
                         }))
                       }
                     >
-                      <option value="openai">openai</option>
-                      <option value="local_qwen">local_qwen</option>
+                      <option value="openai">OpenAI</option>
+                      <option value="local_qwen">本地 Qwen</option>
                     </select>
                   </div>
                 </div>
@@ -1864,7 +1864,7 @@ export function SettingsClient() {
                         <th>任务</th>
                         <th>模型</th>
                         <th>隐私</th>
-                        <th>Token</th>
+                        <th>令牌数</th>
                         <th>延迟</th>
                         <th>费用</th>
                       </tr>

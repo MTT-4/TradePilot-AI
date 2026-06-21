@@ -1,0 +1,21 @@
+{
+  "type": "object",
+  "properties": {
+    "query": { "type": "string" },
+    "candidates": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "code": { "type": "string" },
+          "description": { "type": "string" }
+        },
+        "required": ["code", "description"],
+        "additionalProperties": false
+      }
+    },
+    "disclaimer": { "type": "string" }
+  },
+  "required": ["query", "candidates", "disclaimer"],
+  "additionalProperties": false
+}

@@ -1,0 +1,23 @@
+{
+  "request": {
+    "question": "如果我要新增一个 skill，应该落哪些文件？"
+  },
+  "response": {
+    "answer": "按当前项目约定，至少要补服务层文件、`/api/skills/*` 路由、必要时前端入口页，以及 `docs/skills/<name>/` 下的契约文档。模型调用统一走 `apps/web/server/model-gateway/index.ts`，多租户访问走 `apps/web/server/auth/access.ts` 和 `tenant-prisma`。",
+    "source_files": [
+      "AGENTS.md",
+      "docs/HANDOVER.md",
+      "apps/web/server/model-gateway/index.ts",
+      "apps/web/server/auth/access.ts"
+    ],
+    "commands": [
+      "npm run lint",
+      "npm run typecheck",
+      "npm run test"
+    ],
+    "caveats": [
+      "新增 skill 时不要绕开 model-gateway 直接调模型",
+      "涉及内部资料时优先走本地模型和 INTERNAL_ONLY"
+    ]
+  }
+}

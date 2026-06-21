@@ -1,0 +1,11 @@
+[
+  {
+    "comment": "发货通知，部分字段留待人工补",
+    "input": { "stage": "shipment", "leadId": "lead_1", "facts": { "order_no": "PO-2026-018", "carrier": "Maersk" } },
+    "output_excerpt": {
+      "stage": "shipment",
+      "requires_human_confirmation": true,
+      "unresolved_fields": ["tracking_no", "documents", "sender"]
+    }
+  }
+]

@@ -1,0 +1,16 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "order_delivery_communication.output",
+  "type": "object",
+  "required": ["stage", "subject", "body", "requires_human_confirmation", "unresolved_fields"],
+  "properties": {
+    "stage": { "type": "string" },
+    "subject": { "type": "string" },
+    "body": { "type": "string" },
+    "requires_human_confirmation": { "const": true },
+    "unresolved_fields": { "type": "array", "items": { "type": "string" } },
+    "confirmation_checklist": { "type": "array", "items": { "type": "string" } },
+    "warnings": { "type": "array", "items": { "type": "string" } }
+  },
+  "additionalProperties": false
+}

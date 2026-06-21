@@ -684,7 +684,7 @@ export function TrackingLinksClient() {
                 </div>
 
                 <div className="field" style={{ marginBottom: 0 }}>
-                  <label htmlFor="tracking-utm-source">utm_source</label>
+                  <label htmlFor="tracking-utm-source">utm_source（来源）</label>
                   <input
                     id="tracking-utm-source"
                     value={activeForm.utmSource}
@@ -700,7 +700,7 @@ export function TrackingLinksClient() {
                 </div>
 
                 <div className="field" style={{ marginBottom: 0 }}>
-                  <label htmlFor="tracking-utm-medium">utm_medium</label>
+                  <label htmlFor="tracking-utm-medium">utm_medium（媒介）</label>
                   <input
                     id="tracking-utm-medium"
                     value={activeForm.utmMedium}
@@ -716,7 +716,7 @@ export function TrackingLinksClient() {
                 </div>
 
                 <div className="field" style={{ marginBottom: 0 }}>
-                  <label htmlFor="tracking-utm-campaign">utm_campaign</label>
+                  <label htmlFor="tracking-utm-campaign">utm_campaign（活动）</label>
                   <input
                     id="tracking-utm-campaign"
                     value={activeForm.utmCampaign}
@@ -732,7 +732,7 @@ export function TrackingLinksClient() {
                 </div>
 
                 <div className="field" style={{ marginBottom: 0 }}>
-                  <label htmlFor="tracking-utm-content">utm_content</label>
+                  <label htmlFor="tracking-utm-content">utm_content（内容）</label>
                   <input
                     id="tracking-utm-content"
                     value={activeForm.utmContent}

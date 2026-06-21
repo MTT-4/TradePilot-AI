@@ -1,0 +1,26 @@
+{
+  "type": "object",
+  "properties": {
+    "currency": { "type": "string" },
+    "validityDays": { "type": "integer", "minimum": 1, "maximum": 365 },
+    "defaultIncoterm": { "type": "string", "enum": ["FOB", "CIF", "EXW"] },
+    "marginPercent": { "type": ["number", "null"] },
+    "minMarginPercent": { "type": ["number", "null"] },
+    "moq": { "type": ["integer", "null"] },
+    "tiers": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "minQty": { "type": "integer", "minimum": 1 },
+          "discountPercent": { "type": "number", "minimum": 0, "maximum": 90 }
+        },
+        "required": ["minQty", "discountPercent"],
+        "additionalProperties": false
+      }
+    },
+    "paymentTerms": { "type": "string" },
+    "notes": { "type": "string" }
+  },
+  "additionalProperties": false
+}

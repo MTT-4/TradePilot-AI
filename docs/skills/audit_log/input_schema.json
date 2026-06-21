@@ -1,0 +1,19 @@
+{
+  "type": "object",
+  "properties": {
+    "action": {
+      "type": "string",
+      "description": "Optional action filter."
+    },
+    "entityType": {
+      "type": "string",
+      "description": "Optional entity type filter."
+    },
+    "limit": {
+      "type": "integer",
+      "minimum": 1,
+      "description": "Optional page size, capped at 200."
+    }
+  },
+  "additionalProperties": false
+}

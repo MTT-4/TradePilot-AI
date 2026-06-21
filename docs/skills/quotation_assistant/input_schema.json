@@ -1,0 +1,19 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "quotation_assistant.input",
+  "type": "object",
+  "properties": {
+    "inquiryId": { "type": "string", "description": "可选，自动带出产品与数量（读 rawPayload.analysis）" },
+    "product": { "type": "string" },
+    "quantity": { "type": "string" },
+    "baseUnitCost": {
+      "type": "number",
+      "exclusiveMinimum": 0,
+      "description": "人工提供的成本基准；缺省则系统不生成单价"
+    },
+    "incoterm": { "type": "string", "enum": ["FOB", "CIF", "EXW"] },
+    "currency": { "type": "string" },
+    "marginPercent": { "type": "number", "minimum": 0, "maximum": 500 }
+  },
+  "additionalProperties": false
+}

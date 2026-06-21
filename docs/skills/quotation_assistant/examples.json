@@ -1,0 +1,12 @@
+[
+  {
+    "comment": "给了成本基准 → 据利润率算单价",
+    "input": { "product": "LED panel 600x600", "quantity": "5000 pcs", "baseUnitCost": 8.0, "marginPercent": 25, "incoterm": "FOB", "currency": "USD" },
+    "output_excerpt": { "unitPrice": 10.0, "needs_base_cost": false, "requires_human_confirmation": true }
+  },
+  {
+    "comment": "未给成本 → 单价留空，正文 [待确认]",
+    "input": { "inquiryId": "inq_123" },
+    "output_excerpt": { "unitPrice": null, "needs_base_cost": true, "requires_human_confirmation": true }
+  }
+]

@@ -1,0 +1,23 @@
+{
+  "request": {
+    "action": "data_exported",
+    "entityType": "export",
+    "limit": 20
+  },
+  "response": {
+    "items": [
+      {
+        "id": "audit_123",
+        "action": "data_exported",
+        "entityType": "export",
+        "entityId": "leads",
+        "actorUserId": "user_1",
+        "metadata": {
+          "type": "leads",
+          "count": 120
+        },
+        "createdAt": "2026-06-21T07:12:00.000Z"
+      }
+    ]
+  }
+}

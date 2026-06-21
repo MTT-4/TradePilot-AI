@@ -1,6 +1,7 @@
 import { HitlTaskType, type NotificationStatus } from "@prisma/client";
 import { getPrismaClient } from "@/server/db/prisma";
 import type { TenantContext } from "@/server/db/tenant-context";
+import { filterLivePendingHitlTasks } from "@/server/hitl/filter-pending";
 
 function formatTaskTitle(type: string) {
   switch (type) {
@@ -87,13 +88,18 @@ export async function listNotifications(params: {
       createdAt: true,
     },
   });
+  const visibleHitlTasks = await filterLivePendingHitlTasks({
+    tenantId: params.tenantContext.tenantId,
+    tasks: hitlTasks,
+    replyReader: prisma.reply,
+  });
 
   const taskNotifications =
     params.tenantContext.role === "VIEWER" ||
     params.status === "read" ||
     params.status === "archived"
       ? []
-      : hitlTasks.map((task) => ({
+      : visibleHitlTasks.map((task) => ({
           id: `hitl-${task.id}`,
           type: "hitl_pending",
           status: "unread",

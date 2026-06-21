@@ -1,0 +1,10 @@
+[
+  {
+    "input": { "product": "LED panel light", "markets": ["EU"], "country": "DE" },
+    "output_excerpt": {
+      "required_certifications": [{ "code": "CE" }, { "code": "RoHS" }],
+      "hs_code_candidates": [{ "code": "9405" }],
+      "requires_expert_confirmation": true
+    }
+  }
+]

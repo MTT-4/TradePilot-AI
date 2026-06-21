@@ -1,0 +1,45 @@
+[
+  {
+    "input": {
+      "inquiry": {
+        "country": "ae",
+        "company_name": "ABC Trading",
+        "contact_name": "",
+        "product_interest": "LED panel light 600x600"
+      },
+      "scoring": { "score": "A" },
+      "source": "email"
+    },
+    "output": {
+      "lead_id": "lead_01HZX...",
+      "company": "ABC Trading",
+      "contact": "",
+      "country": "ae",
+      "product_interest": "LED panel light 600x600",
+      "score": "A",
+      "lead_status": "new",
+      "needs_review": false,
+      "next_action": "业务确认价格与交期，准备首封报价回复。",
+      "created": true
+    }
+  },
+  {
+    "input": {
+      "inquiry": { "country": "", "company_name": "", "product_interest": "" },
+      "scoring": { "score": "C" },
+      "source": "form"
+    },
+    "output": {
+      "lead_id": "lead_01HZY...",
+      "company": "",
+      "contact": "",
+      "country": "",
+      "product_interest": "",
+      "score": "C",
+      "lead_status": "new",
+      "needs_review": true,
+      "next_action": "疑似垃圾询盘，写一条 note activity 待人工复核后再决定是否跟进。",
+      "created": true
+    }
+  }
+]

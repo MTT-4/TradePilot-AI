@@ -1,0 +1,35 @@
+[
+  {
+    "input": {
+      "inquiry": {
+        "language": "en",
+        "country": "ae",
+        "company_name": "ABC Trading",
+        "product_interest": "LED panel light 600x600",
+        "specifications": ["600x600", "40W"],
+        "quantity": "5000 pcs",
+        "intent_type": "price_request",
+        "asks_for_price": true,
+        "asks_for_certification": true,
+        "urgency": "high"
+      },
+      "knowledge": {
+        "matched_knowledge": [
+          { "title": "LED Panel 规格", "content": "40W/4000lm，CE、RoHS 已认证", "source_file": "LED_Panel_Spec_2026.pdf", "source_type": "pdf", "confidence": "high" }
+        ],
+        "missing_information": ["FOB 价格未记录", "交期未记录"],
+        "confidence": "high"
+      },
+      "target_locale": "en"
+    },
+    "output": {
+      "internal_analysis_zh": "阿联酋 ABC Trading 高质量询盘，量大(5000)、紧急、要 CE。规格和认证可引用知识库；价格和交期知识库缺失，需业务确认后再报。",
+      "reply_subject": "Re: 600x600 40W LED Panel Light - Specs & CE Certificate",
+      "reply_body": "Dear ABC Trading team,\n\nThank you for your interest in our 600x600 40W LED panel light (4000lm). The product is CE and RoHS certified, and we can provide the certificates upon request.\n\nTo prepare an accurate FOB quotation for 5000 pcs, could you confirm your destination port and required lead time? We will revert with pricing and delivery shortly.\n\nBest regards,",
+      "questions_to_confirm": ["目的港", "期望交期", "是否需要样品"],
+      "uncertain_points": ["FOB 单价待业务确认", "交期待生产确认"],
+      "knowledge_sources": ["LED_Panel_Spec_2026.pdf"],
+      "next_action": "业务确认价格与交期后，补全报价并经 HITL 审批发送。"
+    }
+  }
+]

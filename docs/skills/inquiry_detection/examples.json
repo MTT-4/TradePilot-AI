@@ -1,0 +1,52 @@
+[
+  {
+    "input": {
+      "text": "Hi, we are ABC Trading from UAE. We need 5000 pcs of your LED panel light 600x600, 40W. Please send FOB price and CE certificate. Need quotation urgently.",
+      "source": "email"
+    },
+    "output": {
+      "language": "en",
+      "country": "ae",
+      "company_name": "ABC Trading",
+      "contact_name": "",
+      "product_interest": "LED panel light 600x600",
+      "specifications": ["600x600", "40W"],
+      "quantity": "5000 pcs",
+      "intent_type": "price_request",
+      "asks_for_price": true,
+      "asks_for_sample": false,
+      "asks_for_certification": true,
+      "asks_for_delivery_time": false,
+      "asks_for_payment_terms": false,
+      "urgency": "high",
+      "quality_signal": "high",
+      "risk_flags": [],
+      "summary_zh": "阿联酋 ABC Trading 询 5000 件 600x600 40W LED 面板灯，要 FOB 报价和 CE 证书，紧急。"
+    }
+  },
+  {
+    "input": {
+      "text": "please send me catalog and best price for everything you have, urgent deal 100% guaranteed",
+      "source": "form"
+    },
+    "output": {
+      "language": "en",
+      "country": "",
+      "company_name": "",
+      "contact_name": "",
+      "product_interest": "",
+      "specifications": [],
+      "quantity": "",
+      "intent_type": "unknown",
+      "asks_for_price": true,
+      "asks_for_sample": false,
+      "asks_for_certification": false,
+      "asks_for_delivery_time": false,
+      "asks_for_payment_terms": false,
+      "urgency": "low",
+      "quality_signal": "low",
+      "risk_flags": ["vague_request", "possible_spam"],
+      "summary_zh": "笼统索要全部产品目录和最低价，信息缺失，疑似垃圾询盘，需人工确认后再回复。"
+    }
+  }
+]

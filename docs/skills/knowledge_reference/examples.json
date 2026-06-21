@@ -1,0 +1,30 @@
+[
+  {
+    "input": {
+      "query": "LED panel light 600x600 40W FOB price CE certificate MOQ",
+      "required_fields": ["moq", "certification", "lead_time", "price"]
+    },
+    "output": {
+      "matched_knowledge": [
+        {
+          "title": "LED Panel 600x600 规格",
+          "content": "40W / 4000lm / 3000-6500K，CE、RoHS 已认证。",
+          "source_file": "LED_Panel_Spec_2026.pdf",
+          "source_type": "pdf",
+          "confidence": "high"
+        },
+        {
+          "title": "MOQ 与包装",
+          "content": "MOQ 200pcs，纸箱 5pcs/box。",
+          "source_file": "Price_Packing.xlsx",
+          "source_type": "xlsx",
+          "confidence": "high"
+        }
+      ],
+      "missing_information": ["FOB 价格未在知识库中找到", "交期 lead_time 未记录"],
+      "source_files": ["LED_Panel_Spec_2026.pdf", "Price_Packing.xlsx"],
+      "confidence": "high",
+      "notes_for_sales": "规格和认证可直接引用；价格与交期知识库缺失，回复时需人工补充或标注待确认。"
+    }
+  }
+]

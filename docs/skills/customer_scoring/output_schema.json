@@ -1,0 +1,29 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "customer_scoring.output",
+  "type": "object",
+  "required": ["score", "score_reason"],
+  "properties": {
+    "score": { "type": "string", "enum": ["A", "B", "C"], "description": "落库 Lead.score" },
+    "score_reason": {
+      "type": "string",
+      "description": "落库 Lead.scoreReason（由 score_reasons join 而成的单字符串）"
+    },
+    "score_value": { "type": "number", "description": "仅内存/展示，不落库" },
+    "score_reasons": {
+      "description": "仅内存中间结构，落库时 join 进 score_reason",
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["factor", "impact", "detail"],
+        "properties": {
+          "factor": { "type": "string" },
+          "impact": { "type": "string", "enum": ["positive", "negative", "neutral"] },
+          "detail": { "type": "string" }
+        }
+      }
+    },
+    "risk_signals": { "type": "array", "items": { "type": "string" } }
+  },
+  "additionalProperties": false
+}

@@ -1,0 +1,16 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "inquiry_detection.input",
+  "type": "object",
+  "required": ["text"],
+  "properties": {
+    "text": { "type": "string", "minLength": 1, "description": "询盘原文" },
+    "locale_hint": { "type": "string", "description": "来源语言提示，如 en/ar/es" },
+    "source": {
+      "type": "string",
+      "enum": ["form", "email", "whatsapp", "manual"],
+      "description": "来源渠道提示。注意：DB Inquiry.sourceType 当前仅持久化 form|email；whatsapp|manual 暂存 rawPayload.source。"
+    }
+  },
+  "additionalProperties": false
+}

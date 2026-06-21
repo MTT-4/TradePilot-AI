@@ -1,0 +1,26 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "crm_auto_entry.output",
+  "type": "object",
+  "required": ["lead_id", "lead_status", "created"],
+  "properties": {
+    "lead_id": { "type": "string" },
+    "company": { "type": "string" },
+    "contact": { "type": "string" },
+    "country": { "type": "string" },
+    "product_interest": { "type": "string" },
+    "score": { "type": "string", "enum": ["A", "B", "C"] },
+    "lead_status": {
+      "type": "string",
+      "enum": ["new", "contacted", "following", "won", "lost"],
+      "description": "对齐真实 LeadStatus 枚举"
+    },
+    "needs_review": {
+      "type": "boolean",
+      "description": "true 时仍用 lead_status=new + 一条 note activity 表达，不造新状态"
+    },
+    "next_action": { "type": "string" },
+    "created": { "type": "boolean", "description": "true=新建，false=更新已有客户" }
+  },
+  "additionalProperties": false
+}

@@ -1,0 +1,16 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "first_response_draft.output",
+  "type": "object",
+  "required": ["internal_analysis_zh", "reply_subject", "reply_body", "next_action"],
+  "properties": {
+    "internal_analysis_zh": { "type": "string" },
+    "reply_subject": { "type": "string" },
+    "reply_body": { "type": "string" },
+    "questions_to_confirm": { "type": "array", "items": { "type": "string" } },
+    "uncertain_points": { "type": "array", "items": { "type": "string" } },
+    "knowledge_sources": { "type": "array", "items": { "type": "string" } },
+    "next_action": { "type": "string" }
+  },
+  "additionalProperties": false
+}

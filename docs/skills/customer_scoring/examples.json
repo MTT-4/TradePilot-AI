@@ -1,0 +1,40 @@
+[
+  {
+    "input": {
+      "inquiry": { "country": "ae", "quantity": "5000 pcs", "intent_type": "price_request", "quality_signal": "high" },
+      "company_email": "buyer@abc-trading.ae",
+      "website": "abc-trading.ae",
+      "request_clarity": "high"
+    },
+    "output": {
+      "score": "A",
+      "score_value": 86,
+      "score_reason": "阿联酋为优先市场；5000 件采购量较大；企业域名邮箱；需求明确含规格与认证要求。",
+      "score_reasons": [
+        { "factor": "country", "impact": "positive", "detail": "阿联酋为优先市场" },
+        { "factor": "quantity", "impact": "positive", "detail": "5000 件采购量较大" },
+        { "factor": "company_email", "impact": "positive", "detail": "企业域名邮箱，非免费邮箱" },
+        { "factor": "request_clarity", "impact": "positive", "detail": "需求明确，含规格与认证要求" }
+      ],
+      "risk_signals": []
+    }
+  },
+  {
+    "input": {
+      "inquiry": { "country": "", "quantity": "", "intent_type": "unknown", "quality_signal": "low" },
+      "company_email": "deal12345@gmail.com",
+      "request_clarity": "low"
+    },
+    "output": {
+      "score": "C",
+      "score_value": 28,
+      "score_reason": "免费邮箱可信度低；需求笼统无产品无数量；未提供国家信息。",
+      "score_reasons": [
+        { "factor": "company_email", "impact": "negative", "detail": "免费邮箱，可信度低" },
+        { "factor": "request_clarity", "impact": "negative", "detail": "需求笼统，无产品无数量" },
+        { "factor": "country", "impact": "neutral", "detail": "未提供国家信息" }
+      ],
+      "risk_signals": ["possible_spam"]
+    }
+  }
+]

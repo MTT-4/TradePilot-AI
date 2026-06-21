@@ -1,0 +1,12 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "first_response_draft.input",
+  "type": "object",
+  "required": ["inquiry", "knowledge"],
+  "properties": {
+    "inquiry": { "type": "object", "description": "inquiry_detection.output" },
+    "knowledge": { "type": "object", "description": "knowledge_reference.output" },
+    "target_locale": { "type": "string", "description": "客户回复语言，默认取 inquiry.language" }
+  },
+  "additionalProperties": false
+}

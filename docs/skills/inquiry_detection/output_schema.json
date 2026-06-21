@@ -1,0 +1,29 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "inquiry_detection.output",
+  "type": "object",
+  "required": ["language", "intent_type", "urgency", "quality_signal", "summary_zh"],
+  "properties": {
+    "language": { "type": "string" },
+    "country": { "type": "string" },
+    "company_name": { "type": "string" },
+    "contact_name": { "type": "string" },
+    "product_interest": { "type": "string" },
+    "specifications": { "type": "array", "items": { "type": "string" } },
+    "quantity": { "type": "string" },
+    "intent_type": {
+      "type": "string",
+      "enum": ["price_request", "sample_request", "product_info", "partnership", "unknown"]
+    },
+    "asks_for_price": { "type": "boolean" },
+    "asks_for_sample": { "type": "boolean" },
+    "asks_for_certification": { "type": "boolean" },
+    "asks_for_delivery_time": { "type": "boolean" },
+    "asks_for_payment_terms": { "type": "boolean" },
+    "urgency": { "type": "string", "enum": ["low", "medium", "high"] },
+    "quality_signal": { "type": "string", "enum": ["low", "medium", "high"] },
+    "risk_flags": { "type": "array", "items": { "type": "string" } },
+    "summary_zh": { "type": "string" }
+  },
+  "additionalProperties": false
+}

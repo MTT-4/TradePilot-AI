@@ -46,6 +46,7 @@ type DesignItem = {
   platform: string;
   mediaType: string;
   publishStatus: string;
+  plannedAt: string | null;
   contentPackId: string;
   contentPackTitle: string;
   publishRequestPending: boolean;
@@ -95,6 +96,19 @@ async function fetchChecklist(tenantId: string) {
 
 function platformLabel(platform: string) {
   return platform.toUpperCase().replaceAll("_", " ");
+}
+
+function formatPlannedAt(value: string | null) {
+  if (!value) {
+    return "未排期";
+  }
+
+  return new Intl.DateTimeFormat("zh-CN", {
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+  }).format(new Date(value));
 }
 
 export function PublishChecklistClient() {
@@ -375,7 +389,7 @@ export function PublishChecklistClient() {
                 <span>{platformLabel(item.platform)} · {item.mediaType}</span>
               </div>
               <div className="sub" style={{ marginTop: 4 }}>
-                {item.contentPackTitle}
+                {item.contentPackTitle} · 推荐排期 {formatPlannedAt(item.plannedAt)}
               </div>
               <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 8 }}>
                 <span className={`st ${item.publishStatus}`}>{statusLabel(item.publishStatus)}</span>

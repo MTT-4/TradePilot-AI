@@ -22,12 +22,20 @@ import {
 import { z } from "zod";
 import { getEnv } from "@/lib/env";
 import { ApiError } from "@/server/api/errors";
+import {
+  buildAssetPromptSection,
+  getContentAssetsByIds,
+} from "@/server/assets/service";
 import type { TenantContext } from "@/server/db/tenant-context";
 import { getPrismaClient } from "@/server/db/prisma";
 import { getTenantPrisma } from "@/server/db/tenant-prisma";
 import { enqueueTenantJob } from "@/server/jobs/service";
 import { hybridSearchKnowledgeChunks } from "@/server/kb/service";
 import { createModelGateway } from "@/server/model-gateway";
+import {
+  inferPromotionCountry,
+  suggestNextPromotionTime,
+} from "@/server/scheduling/promotion-timing";
 import { putTenantObject } from "@/server/storage/object-store";
 import { createTrackingLink } from "@/server/tracking/service";
 
@@ -53,6 +61,9 @@ const contentPackGenerateSchema = z.object({
   market: z.string().trim().min(1).max(120).optional(),
   locales: z.array(apiLocaleSchema).min(1).max(6),
   platforms: z.array(apiPlatformSchema).min(1).max(9).optional(),
+  assetIds: z.array(z.string().trim().min(1)).max(24).optional(),
+  knowledgeDocumentIds: z.array(z.string().trim().min(1)).max(24).optional(),
+  referenceBrandKit: z.boolean().optional(),
 });
 
 const contentPackChatMessageSchema = z.object({
@@ -574,6 +585,10 @@ async function getLatestBrandKit(tenantContext: TenantContext) {
   });
 }
 
+function normalizeReferenceIds(ids?: string[]) {
+  return Array.from(new Set((ids ?? []).map((id) => id.trim()).filter(Boolean)));
+}
+
 async function resolvePackCampaign(params: {
   tenantContext: TenantContext;
   createdByUserId?: string;
@@ -679,8 +694,42 @@ async function searchPackKnowledge(params: {
   requestedByUserId?: string;
   topic: string;
   market?: string;
+  knowledgeDocumentIds?: string[];
   fetchImpl?: typeof fetch;
 }) {
+  const normalizedDocumentIds = normalizeReferenceIds(params.knowledgeDocumentIds);
+
+  if (normalizedDocumentIds.length > 0) {
+    const tenantPrisma = getTenantPrisma(params.tenantContext);
+
+    return tenantPrisma.knowledgeChunk.findMany({
+      where: {
+        documentId: {
+          in: normalizedDocumentIds,
+        },
+        document: {
+          status: "READY",
+        },
+        sensitivity: KnowledgeSensitivity.PUBLIC,
+      },
+      orderBy: [
+        {
+          updatedAt: "desc",
+        },
+        {
+          createdAt: "desc",
+        },
+      ],
+      take: 6,
+      select: {
+        id: true,
+        text: true,
+        sourceCitation: true,
+        sensitivity: true,
+      },
+    });
+  }
+
   const result = await hybridSearchKnowledgeChunks({
     tenantContext: params.tenantContext,
     userId: params.requestedByUserId,
@@ -709,6 +758,7 @@ function buildGeneratePrompt(params: {
   selectedPlatforms: Platform[];
   platformRules: NormalizedPlatformRule[];
   brandKit: Awaited<ReturnType<typeof getLatestBrandKit>>;
+  assetPrompt?: string;
 }) {
   return [
     "Create a social content pack in JSON only.",
@@ -720,6 +770,7 @@ function buildGeneratePrompt(params: {
     params.brandKit
       ? `Brand kit: ${params.brandKit.companyName}, primary ${params.brandKit.primaryColor ?? "n/a"}, secondary ${params.brandKit.secondaryColor ?? "n/a"}`
       : "Brand kit: use a neutral industrial B2B look.",
+    params.assetPrompt,
     "For image and carousel platforms, return usable imagePrompt, coverHeadline, caption body, hashtags, visualDirection.",
     "For video platforms, return script beats, storyboard beats, coverHeadline, caption body, hashtags. Do not generate rendered video, TTS, or subtitles.",
     "Return JSON with keys: title, items[].",
@@ -1067,14 +1118,23 @@ async function generatePackDraft(params: {
   const platformRules = selectedPlatforms.map(
     (platform) => platformRulesMap.get(platform)!,
   );
-  const brandKit = await getLatestBrandKit(params.tenantContext);
-  const knowledgeItems = await searchPackKnowledge({
-    tenantContext: params.tenantContext,
-    requestedByUserId: params.requestedByUserId,
-    topic: params.input.topic,
-    market: params.input.market,
-    fetchImpl: params.fetchImpl,
-  });
+  const [brandKit, selectedAssets, knowledgeItems] = await Promise.all([
+    params.input.referenceBrandKit
+      ? getLatestBrandKit(params.tenantContext)
+      : Promise.resolve(null),
+    getContentAssetsByIds({
+      tenantContext: params.tenantContext,
+      assetIds: params.input.assetIds,
+    }),
+    searchPackKnowledge({
+      tenantContext: params.tenantContext,
+      requestedByUserId: params.requestedByUserId,
+      topic: params.input.topic,
+      market: params.input.market,
+      knowledgeDocumentIds: params.input.knowledgeDocumentIds,
+      fetchImpl: params.fetchImpl,
+    }),
+  ]);
   const gateway = createModelGateway({
     fetchImpl: params.fetchImpl,
   });
@@ -1089,6 +1149,7 @@ async function generatePackDraft(params: {
       selectedPlatforms,
       platformRules,
       brandKit,
+      assetPrompt: buildAssetPromptSection(selectedAssets),
     }),
     knowledgeChunks: buildKnowledgeSummary(knowledgeItems),
   });
@@ -1503,6 +1564,14 @@ export async function runGenerateContentPackJob(params: {
   });
   await params.reportProgress?.(58);
 
+  const inferredCountry = inferPromotionCountry(params.request.market);
+  const nextPromotionTime = inferredCountry
+    ? suggestNextPromotionTime({
+        country: inferredCountry,
+      })
+    : null;
+  const plannedBaseTime = nextPromotionTime?.plannedAt ?? new Date();
+
   for (const [index, item] of draft.items.entries()) {
     await tenantPrisma.contentItem.create({
       data: {
@@ -1515,7 +1584,7 @@ export async function runGenerateContentPackJob(params: {
         body: item.body,
         spec: item.spec,
         publishStatus: PublishStatus.PENDING,
-        plannedAt: new Date(Date.now() + index * 3_600_000),
+        plannedAt: new Date(plannedBaseTime.getTime() + index * 3_600_000),
       },
     });
   }

@@ -13,6 +13,9 @@ const requestSchema = z.object({
     style: z.string().trim().min(1).max(120),
     cta: z.string().trim().min(1).max(120),
   }),
+  assetIds: z.array(z.string().trim().min(1)).max(24).optional(),
+  knowledgeDocumentIds: z.array(z.string().trim().min(1)).max(24).optional(),
+  referenceBrandKit: z.boolean().optional(),
 });
 
 export const POST = auth(async (request) => {
@@ -33,6 +36,9 @@ export const POST = auth(async (request) => {
       tenantContext: context,
       requestedByUserId: userId,
       brief: input.brief,
+      assetIds: input.assetIds,
+      knowledgeDocumentIds: input.knowledgeDocumentIds,
+      referenceBrandKit: input.referenceBrandKit,
     });
 
     return Response.json(result, { status: 202 });

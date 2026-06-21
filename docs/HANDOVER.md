@@ -36,7 +36,7 @@ a8b03ea fix: harden ci and settings operations
 - **字体**：`layout.tsx` 用 next/font 接入 Space Grotesk / Inter / Space Mono，变量对应 globals.css 的 `--font-*`。
 - **已按原型改版的页面**：工作台 (`/`)、登录 (`/login`)、知识库 (`/kb/reviews`)、站点 (`/sites`)、
   内容包 (`/design`)、CRM (`/crm`)、首响审批 (`/hitl`)、站点对话编辑 (`/sites/[id]/chat`)、
-  内容包对话 (`/content-packs/[id]/chat`)、通知中心 (`/notifications`)、发布清单 (`/publish-checklist`)、设置 (`/settings`)。
+  内容包对话 (`/content-packs/[id]/chat`)、通知中心 (`/notifications`)、发布清单 (`/publish-checklist`)、任务监控 (`/jobs`)、设置 (`/settings`)。
   所有数据接线 / API 调用 / 权限判断均未改，只换外观或做聚合展示。
 - **权限与合规**：
   - `/settings` 已接入成员管理、数据请求（导出 / 删除）、品牌配置表单、模型策略表单、模型用量与审计基线；
@@ -123,7 +123,7 @@ a8b03ea fix: harden ci and settings operations
 
 ### 4.6 缺口（低优先 / 部分属 M7）
 
-- 任务监控页：`/api/jobs`、`/api/jobs/[id]` 有接口、无界面，可加只读运维页。
+- 任务监控页：**已完成**——`/jobs` 已接入 `/api/jobs`、`/api/jobs/[id]`，支持只读列表、筛选、详情回看。
 - 追踪链接管理页：原型/M7 范围，可缓做。
 - 租户创建/切换：**已完成**——顶栏租户菜单可切换/新建（`POST /api/tenants`），首选租户存 localStorage、
   由 `fetchCurrentMe` 带 `X-Tenant-Id`，全站 `currentTenant` 一致。

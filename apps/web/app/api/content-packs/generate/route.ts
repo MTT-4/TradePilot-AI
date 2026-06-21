@@ -27,6 +27,9 @@ const requestSchema = z.object({
     .min(1)
     .max(9)
     .optional(),
+  assetIds: z.array(z.string().trim().min(1)).max(24).optional(),
+  knowledgeDocumentIds: z.array(z.string().trim().min(1)).max(24).optional(),
+  referenceBrandKit: z.boolean().optional(),
 });
 
 export const POST = auth(async (request) => {

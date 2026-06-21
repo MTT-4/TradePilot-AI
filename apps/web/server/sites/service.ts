@@ -1,4 +1,8 @@
 import {
+  buildAssetPromptSection,
+  getContentAssetsByIds,
+} from "@/server/assets/service";
+import {
   HitlStatus,
   HitlTaskType,
   JobType,
@@ -174,6 +178,12 @@ type SearchItem = {
   sensitivity: KnowledgeSensitivity;
 };
 
+type SiteReferenceContextInput = {
+  assetIds?: string[];
+  knowledgeDocumentIds?: string[];
+  referenceBrandKit?: boolean;
+};
+
 function toPrismaLocale(locale: ApiLocale) {
   return locale.toUpperCase() as LocaleCode;
 }
@@ -313,6 +323,7 @@ async function searchPublicKnowledge(params: {
   tenantContext: TenantContext;
   brief: SiteBriefInput;
   extraPrompt?: string;
+  knowledgeDocumentIds?: string[];
 }) {
   const tenantPrisma = getTenantPrisma(params.tenantContext);
   const tokens = buildRetrievalQuery(params.brief, params.extraPrompt)
@@ -323,6 +334,16 @@ async function searchPublicKnowledge(params: {
 
   const items = await tenantPrisma.knowledgeChunk.findMany({
     where: {
+      ...(params.knowledgeDocumentIds?.length
+        ? {
+            documentId: {
+              in: params.knowledgeDocumentIds,
+            },
+          }
+        : {}),
+      document: {
+        status: "READY",
+      },
       sensitivity: KnowledgeSensitivity.PUBLIC,
       OR: tokens.length
         ? tokens.map((token) => ({
@@ -377,6 +398,69 @@ async function searchPublicKnowledge(params: {
   });
 
   return items;
+}
+
+async function getLatestBrandKit(tenantContext: TenantContext) {
+  const tenantPrisma = getTenantPrisma(tenantContext);
+
+  return tenantPrisma.brandKit.findFirst({
+    orderBy: {
+      updatedAt: "desc",
+    },
+    select: {
+      id: true,
+      companyName: true,
+      primaryColor: true,
+      secondaryColor: true,
+      metadata: true,
+    },
+  });
+}
+
+function buildBrandKitPromptSection(
+  brandKit: Awaited<ReturnType<typeof getLatestBrandKit>>,
+) {
+  if (!brandKit) {
+    return "";
+  }
+
+  const tone =
+    brandKit.metadata &&
+    typeof brandKit.metadata === "object" &&
+    !Array.isArray(brandKit.metadata) &&
+    typeof (brandKit.metadata as Record<string, unknown>).tone === "string"
+      ? (brandKit.metadata as Record<string, unknown>).tone
+      : "industrial clarity";
+
+  return `Brand kit: ${brandKit.companyName}, primary ${brandKit.primaryColor ?? "n/a"}, secondary ${brandKit.secondaryColor ?? "n/a"}, tone ${String(tone)}.`;
+}
+
+async function resolveSiteReferenceContext(
+  tenantContext: TenantContext,
+  input?: SiteReferenceContextInput,
+) {
+  const knowledgeDocumentIds = Array.from(
+    new Set(
+      (input?.knowledgeDocumentIds ?? [])
+        .map((id) => id.trim())
+        .filter(Boolean),
+    ),
+  );
+  const [assets, brandKit] = await Promise.all([
+    getContentAssetsByIds({
+      tenantContext,
+      assetIds: input?.assetIds,
+    }),
+    input?.referenceBrandKit ? getLatestBrandKit(tenantContext) : Promise.resolve(null),
+  ]);
+
+  return {
+    knowledgeDocumentIds,
+    assets,
+    brandKit,
+    assetPrompt: buildAssetPromptSection(assets),
+    brandKitPrompt: buildBrandKitPromptSection(brandKit),
+  };
 }
 
 function extractJsonPayload(text: string) {
@@ -1063,27 +1147,59 @@ async function persistSiteDraft(params: {
   });
 }
 
-function buildGenerationPrompt(brief: SiteBriefInput) {
-  const sourceLocale = getSourceLocale(brief);
+function buildGenerationPrompt(params: {
+  brief: SiteBriefInput;
+  brandKitPrompt?: string;
+  assetPrompt?: string;
+}) {
+  return buildSitePrompt({
+    brief: params.brief,
+    summary: "Create a B2B export landing site draft in JSON only.",
+    brandKitPrompt: params.brandKitPrompt,
+    assetPrompt: params.assetPrompt,
+    rules: [
+      "- Use only attached public knowledge context.",
+      "- Keep the copy suitable for public marketing pages.",
+      "- Produce 1 to 3 pages, but default to 1 landing page.",
+      "- Generate only the source locale content. Other locales will be translated later.",
+      "- Include title, headline, subheadline, CTA, sections, FAQ, seoTitle, seoDescription for the source locale.",
+      "- Keep citations only as exact sourceCitation strings from knowledge context.",
+      "- Return JSON with keys: projectName, assistantReply, pages, locales, previewChecks, citations.",
+    ],
+  });
+}
+
+function buildSitePrompt(params: {
+  brief: SiteBriefInput;
+  summary: string;
+  rules: string[];
+  currentSnapshot?: Record<string, unknown>;
+  message?: string;
+  brandKitPrompt?: string;
+  assetPrompt?: string;
+}) {
+  const sourceLocale = getSourceLocale(params.brief);
 
   return sanitizePublicPromptText(
     [
-    "Create a B2B export landing site draft in JSON only.",
-    `Market: ${brief.market}`,
-    `Product: ${brief.product}`,
-    `Source locale: ${sourceLocale}`,
-    `Requested locales: ${brief.locales.join(", ")}`,
-    `Style: ${brief.style}`,
-    `CTA intent: ${brief.cta}`,
-    "Requirements:",
-    "- Use only attached public knowledge context.",
-    "- Keep the copy suitable for public marketing pages.",
-    "- Produce 1 to 3 pages, but default to 1 landing page.",
-    "- Generate only the source locale content. Other locales will be translated later.",
-    "- Include title, headline, subheadline, CTA, sections, FAQ, seoTitle, seoDescription for the source locale.",
-    "- Keep citations only as exact sourceCitation strings from knowledge context.",
-    "- Return JSON with keys: projectName, assistantReply, pages, locales, previewChecks, citations.",
-    ].join("\n"),
+      params.summary,
+      `Market: ${params.brief.market}`,
+      `Product: ${params.brief.product}`,
+      `Source locale: ${sourceLocale}`,
+      `Requested locales: ${params.brief.locales.join(", ")}`,
+      `Style: ${params.brief.style}`,
+      `CTA intent: ${params.brief.cta}`,
+      params.brandKitPrompt,
+      params.assetPrompt,
+      params.currentSnapshot
+        ? ["Current site snapshot JSON:", JSON.stringify(params.currentSnapshot)].join("\n")
+        : null,
+      params.message ? ["User change request:", params.message].join("\n") : null,
+      "Requirements:",
+      ...params.rules,
+    ]
+      .filter(Boolean)
+      .join("\n"),
   );
 }
 
@@ -1091,34 +1207,28 @@ function buildChatPrompt(params: {
   brief: SiteBriefInput;
   message: string;
   snapshot: SiteSnapshot;
+  brandKitPrompt?: string;
+  assetPrompt?: string;
 }) {
-  const sourceLocale = getSourceLocale(params.brief);
-
-  return sanitizePublicPromptText(
-    [
-    "Revise the existing B2B site draft and return JSON only.",
-    `Market: ${params.brief.market}`,
-    `Product: ${params.brief.product}`,
-    `Source locale: ${sourceLocale}`,
-    `Requested locales: ${params.brief.locales.join(", ")}`,
-    `Style: ${params.brief.style}`,
-    `CTA intent: ${params.brief.cta}`,
-    "Current site snapshot JSON:",
-    JSON.stringify({
+  return buildSitePrompt({
+    brief: params.brief,
+    summary: "Revise the existing B2B site draft and return JSON only.",
+    currentSnapshot: {
       pages: params.snapshot.pages,
       locales: params.snapshot.locales,
       previewChecks: params.snapshot.previewChecks,
       citations: params.snapshot.citations,
-    }),
-    "User change request:",
-    params.message,
-    "Rules:",
-    "- Preserve grounded facts and cite only attached public knowledge context.",
-    "- If the request asks for unsupported facts, keep the wording generic instead of inventing specifics.",
-    "- Return only the source locale draft. Other locales will be translated after the update.",
-    "- Return the same JSON shape: projectName, assistantReply, pages, locales, previewChecks, citations.",
-    ].join("\n"),
-  );
+    },
+    message: params.message,
+    brandKitPrompt: params.brandKitPrompt,
+    assetPrompt: params.assetPrompt,
+    rules: [
+      "- Preserve grounded facts and cite only attached public knowledge context.",
+      "- If the request asks for unsupported facts, keep the wording generic instead of inventing specifics.",
+      "- Return only the source locale draft. Other locales will be translated after the update.",
+      "- Return the same JSON shape: projectName, assistantReply, pages, locales, previewChecks, citations.",
+    ],
+  });
 }
 
 async function generateDraftWithModel(params: {
@@ -1184,7 +1294,7 @@ export async function createSiteGenerationRequest(params: {
   tenantContext: TenantContext;
   requestedByUserId?: string;
   brief: SiteBriefInput;
-}) {
+} & SiteReferenceContextInput) {
   const brief = siteBriefSchema.parse(params.brief);
   const prisma = getPrismaClient();
   const slug = await createUniqueSiteSlug(`${brief.product}-${brief.market}`);
@@ -1212,6 +1322,9 @@ export async function createSiteGenerationRequest(params: {
     input: {
       siteId: siteProject.id,
       brief,
+      assetIds: params.assetIds ?? [],
+      knowledgeDocumentIds: params.knowledgeDocumentIds ?? [],
+      referenceBrandKit: Boolean(params.referenceBrandKit),
     },
   });
 
@@ -1228,7 +1341,7 @@ export async function runGenerateSiteJob(params: {
   brief: SiteBriefInput;
   reportProgress?: (progress: number) => Promise<void>;
   fetchImpl?: typeof fetch;
-}) {
+} & SiteReferenceContextInput) {
   const tenantContext: TenantContext = {
     tenantId: params.tenantId,
     userId: params.requestedByUserId ?? "system",
@@ -1236,15 +1349,21 @@ export async function runGenerateSiteJob(params: {
   };
 
   await params.reportProgress?.(15);
+  const referenceContext = await resolveSiteReferenceContext(tenantContext, params);
   const knowledgeItems = await searchPublicKnowledge({
     tenantContext,
     brief: params.brief,
+    knowledgeDocumentIds: referenceContext.knowledgeDocumentIds,
   });
   await params.reportProgress?.(45);
 
   const modelResult = await generateDraftWithModel({
     knowledgeItems,
-    prompt: buildGenerationPrompt(params.brief),
+    prompt: buildGenerationPrompt({
+      brief: params.brief,
+      brandKitPrompt: referenceContext.brandKitPrompt,
+      assetPrompt: referenceContext.assetPrompt,
+    }),
     fetchImpl: params.fetchImpl,
   });
   const sourceDraft = parseModelDraft({
@@ -2767,7 +2886,7 @@ export async function applySiteChatUpdate(params: {
   message: string;
   requestedByUserId?: string;
   fetchImpl?: typeof fetch;
-}) {
+} & SiteReferenceContextInput) {
   const normalizedMessage = params.message.trim();
 
   if (!normalizedMessage) {
@@ -2821,10 +2940,15 @@ export async function applySiteChatUpdate(params: {
     },
     brief,
   );
+  const referenceContext = await resolveSiteReferenceContext(
+    params.tenantContext,
+    params,
+  );
   const knowledgeItems = await searchPublicKnowledge({
     tenantContext: params.tenantContext,
     brief,
     extraPrompt: normalizedMessage,
+    knowledgeDocumentIds: referenceContext.knowledgeDocumentIds,
   });
   const modelResult = await generateDraftWithModel({
     knowledgeItems,
@@ -2832,6 +2956,8 @@ export async function applySiteChatUpdate(params: {
       brief,
       message: normalizedMessage,
       snapshot,
+      brandKitPrompt: referenceContext.brandKitPrompt,
+      assetPrompt: referenceContext.assetPrompt,
     }),
     fetchImpl: params.fetchImpl,
   });

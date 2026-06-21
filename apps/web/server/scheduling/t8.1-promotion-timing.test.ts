@@ -2,6 +2,8 @@ import { describe, it, expect } from "vitest";
 import {
   recommendPromotionTiming,
   COUNTRY_PROFILES,
+  inferPromotionCountry,
+  suggestNextPromotionTime,
 } from "@/server/scheduling/promotion-timing";
 
 describe("T8.1 promotion timing recommender", () => {
@@ -57,5 +59,24 @@ describe("T8.1 promotion timing recommender", () => {
     for (const code of ["AE", "SA", "BR", "MX", "RU", "DE"]) {
       expect(COUNTRY_PROFILES[code]).toBeTruthy();
     }
+  });
+
+  it("infers a country from broad market text", () => {
+    expect(inferPromotionCountry("Middle East")).toBe("AE");
+    expect(inferPromotionCountry("Russia")).toBe("RU");
+    expect(inferPromotionCountry("")).toBeNull();
+  });
+
+  it("suggests the next upcoming promotion slot in UTC", () => {
+    const next = suggestNextPromotionTime({
+      country: "AE",
+      now: new Date("2026-06-01T00:00:00Z"),
+    });
+
+    expect(next?.plannedAt.toISOString()).toBeTruthy();
+    expect(next?.windowLabel).toContain("当地时间");
+    expect(next?.plannedAt.getTime()).toBeGreaterThan(
+      new Date("2026-06-01T00:00:00Z").getTime(),
+    );
   });
 });

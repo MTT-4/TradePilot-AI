@@ -119,6 +119,15 @@ export const HOLIDAYS: Record<string, Holiday[]> = {
   DE: [{ date: "2026-10-03", name: "德国统一日", advice: "avoid" }],
 };
 
+const COUNTRY_ALIASES: Record<string, string[]> = {
+  AE: ["AE", "UAE", "EMIRATES", "DUBAI", "ABU DHABI", "阿联酋", "迪拜", "中东", "MIDDLE EAST", "MENA", "GCC"],
+  SA: ["SA", "KSA", "SAUDI", "SAUDI ARABIA", "沙特", "利雅得"],
+  BR: ["BR", "BRAZIL", "巴西", "LATAM", "LATIN AMERICA", "南美"],
+  MX: ["MX", "MEXICO", "墨西哥"],
+  RU: ["RU", "RUSSIA", "俄罗斯", "独联体", "CIS", "MOSCOW"],
+  DE: ["DE", "GERMANY", "德国", "DACH", "EUROPE", "EU", "欧洲", "BERLIN"],
+};
+
 function toIsoDate(value: Date) {
   return value.toISOString().slice(0, 10);
 }
@@ -127,6 +136,140 @@ function addDays(value: Date, days: number) {
   const next = new Date(value);
   next.setUTCDate(next.getUTCDate() + days);
   return next;
+}
+
+function getZonedParts(date: Date, timeZone: string) {
+  const formatter = new Intl.DateTimeFormat("en-CA", {
+    timeZone,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    hourCycle: "h23",
+  });
+  const parts = formatter.formatToParts(date);
+  const read = (type: Intl.DateTimeFormatPartTypes) =>
+    Number(parts.find((part) => part.type === type)?.value ?? "0");
+
+  return {
+    year: read("year"),
+    month: read("month"),
+    day: read("day"),
+    hour: read("hour"),
+    minute: read("minute"),
+    second: read("second"),
+  };
+}
+
+function getTimeZoneOffsetMs(date: Date, timeZone: string) {
+  const parts = getZonedParts(date, timeZone);
+  const zonedUtcMs = Date.UTC(
+    parts.year,
+    parts.month - 1,
+    parts.day,
+    parts.hour,
+    parts.minute,
+    parts.second,
+  );
+
+  return zonedUtcMs - date.getTime();
+}
+
+function zonedDateTimeToUtc(params: {
+  year: number;
+  month: number;
+  day: number;
+  hour: number;
+  minute?: number;
+  second?: number;
+  timeZone: string;
+}) {
+  const naiveUtcMs = Date.UTC(
+    params.year,
+    params.month - 1,
+    params.day,
+    params.hour,
+    params.minute ?? 0,
+    params.second ?? 0,
+  );
+  const offsetMs = getTimeZoneOffsetMs(new Date(naiveUtcMs), params.timeZone);
+
+  return new Date(naiveUtcMs - offsetMs);
+}
+
+export function inferPromotionCountry(market: string | null | undefined) {
+  const normalized = (market ?? "").trim().toUpperCase();
+
+  if (!normalized) {
+    return null;
+  }
+
+  if (COUNTRY_PROFILES[normalized]) {
+    return normalized;
+  }
+
+  for (const [code, aliases] of Object.entries(COUNTRY_ALIASES)) {
+    if (aliases.some((alias) => normalized.includes(alias))) {
+      return code;
+    }
+  }
+
+  return null;
+}
+
+export function suggestNextPromotionTime(params: {
+  country: string;
+  now?: Date;
+}) {
+  const code = params.country.trim().toUpperCase();
+  const profile = COUNTRY_PROFILES[code];
+  const now = params.now ?? new Date();
+
+  if (!profile) {
+    return null;
+  }
+
+  const nowLocal = getZonedParts(now, profile.timezone);
+
+  for (let dayOffset = 0; dayOffset < 14; dayOffset += 1) {
+    const localDate = new Date(
+      Date.UTC(nowLocal.year, nowLocal.month - 1, nowLocal.day + dayOffset),
+    );
+    const year = localDate.getUTCFullYear();
+    const month = localDate.getUTCMonth() + 1;
+    const day = localDate.getUTCDate();
+    const dayOfWeek = localDate.getUTCDay();
+
+    for (const window of profile.bestWindows) {
+      if (window.dayOfWeek !== dayOfWeek) {
+        continue;
+      }
+
+      const candidate = zonedDateTimeToUtc({
+        year,
+        month,
+        day,
+        hour: window.startHour,
+        timeZone: profile.timezone,
+      });
+
+      if (candidate.getTime() <= now.getTime()) {
+        continue;
+      }
+
+      return {
+        country: code,
+        timezone: profile.timezone,
+        plannedAt: candidate,
+        windowLabel: `${WEEKDAY_LABELS[window.dayOfWeek]} ${String(window.startHour).padStart(2, "0")}:00–${String(window.endHour).padStart(2, "0")}:00（当地时间）`,
+        reason: window.reason,
+      };
+    }
+  }
+
+  return null;
 }
 
 export type PromotionTimingResult = {

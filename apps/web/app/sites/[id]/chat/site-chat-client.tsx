@@ -93,6 +93,23 @@ type SiteDetail = {
   } | null;
 };
 
+type AssetResponse = {
+  items: Array<{
+    id: string;
+    fileName: string;
+    kind: string;
+  }>;
+};
+
+type KnowledgeDocumentsResponse = {
+  items: Array<{
+    id: string;
+    title: string;
+    status: string;
+    sensitivity: string;
+  }>;
+};
+
 function roleAllowsEdit(role: string | undefined) {
   return role === "owner" || role === "admin" || role === "operator";
 }
@@ -113,14 +130,73 @@ function formatStatus(status: SiteDetail["project"]["status"] | SiteDetail["loca
           : "offline";
 }
 
+async function fetchAssets(tenantId: string) {
+  const response = await fetch("/api/assets", {
+    headers: {
+      "X-Tenant-Id": tenantId,
+    },
+  });
+
+  if (!response.ok) {
+    const payload = await response.json().catch(() => null);
+    throw new Error(payload?.error?.message ?? "加载素材失败。");
+  }
+
+  return (await response.json()) as AssetResponse;
+}
+
+async function uploadAsset(tenantId: string, file: File) {
+  const formData = new FormData();
+  formData.set("file", file);
+  formData.set("kind", "reference");
+
+  const response = await fetch("/api/assets", {
+    method: "POST",
+    headers: {
+      "X-Tenant-Id": tenantId,
+    },
+    body: formData,
+  });
+
+  if (!response.ok) {
+    const payload = await response.json().catch(() => null);
+    throw new Error(payload?.error?.message ?? "上传素材失败。");
+  }
+}
+
+async function fetchKnowledgeDocuments(tenantId: string) {
+  const response = await fetch("/api/kb/documents", {
+    headers: {
+      "X-Tenant-Id": tenantId,
+    },
+  });
+
+  if (!response.ok) {
+    const payload = await response.json().catch(() => null);
+    throw new Error(payload?.error?.message ?? "加载知识文档失败。");
+  }
+
+  return (await response.json()) as KnowledgeDocumentsResponse;
+}
+
 export function SiteChatClient({ siteId }: { siteId: string }) {
   const [me, setMe] = useState<MeResponse | null>(null);
   const [selectedTenantId, setSelectedTenantId] = useState("");
   const [detail, setDetail] = useState<SiteDetail | null>(null);
   const [selectedLocale, setSelectedLocale] = useState<string>("");
   const [message, setMessage] = useState("");
+  const [assets, setAssets] = useState<AssetResponse["items"]>([]);
+  const [knowledgeDocuments, setKnowledgeDocuments] = useState<
+    KnowledgeDocumentsResponse["items"]
+  >([]);
+  const [selectedAssetIds, setSelectedAssetIds] = useState<string[]>([]);
+  const [selectedKnowledgeDocumentIds, setSelectedKnowledgeDocumentIds] = useState<string[]>(
+    [],
+  );
+  const [referenceBrandKit, setReferenceBrandKit] = useState(true);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
+  const [uploadingAsset, setUploadingAsset] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -209,6 +285,36 @@ export function SiteChatClient({ siteId }: { siteId: string }) {
     };
   }, [selectedTenantId, siteId]);
 
+  useEffect(() => {
+    if (!selectedTenantId) {
+      return;
+    }
+
+    let active = true;
+
+    void Promise.all([
+      fetchAssets(selectedTenantId),
+      fetchKnowledgeDocuments(selectedTenantId),
+    ])
+      .then(([assetsPayload, documentsPayload]) => {
+        if (!active) {
+          return;
+        }
+
+        setAssets(assetsPayload.items);
+        setKnowledgeDocuments(documentsPayload.items);
+      })
+      .catch((loadError) => {
+        if (active) {
+          setError(loadError instanceof Error ? loadError.message : "加载引用数据失败。");
+        }
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [selectedTenantId]);
+
   const currentMembership =
     me?.memberships.find((membership) => membership.tenantId === selectedTenantId) ?? null;
   const currentLocale =
@@ -240,6 +346,9 @@ export function SiteChatClient({ siteId }: { siteId: string }) {
         },
         body: JSON.stringify({
           message: message.trim(),
+          assetIds: selectedAssetIds,
+          knowledgeDocumentIds: selectedKnowledgeDocumentIds,
+          referenceBrandKit,
         }),
       });
 
@@ -259,6 +368,25 @@ export function SiteChatClient({ siteId }: { siteId: string }) {
     }
   }
 
+  async function handleAssetUpload(file: File | null) {
+    if (!selectedTenantId || !file) {
+      return;
+    }
+
+    setUploadingAsset(true);
+    setError(null);
+
+    try {
+      await uploadAsset(selectedTenantId, file);
+      const payload = await fetchAssets(selectedTenantId);
+      setAssets(payload.items);
+    } catch (uploadError) {
+      setError(uploadError instanceof Error ? uploadError.message : "上传素材失败。");
+    } finally {
+      setUploadingAsset(false);
+    }
+  }
+
   return (
     <>
       <div className="head-row" style={{ marginBottom: 18 }}>
@@ -275,7 +403,11 @@ export function SiteChatClient({ siteId }: { siteId: string }) {
             <select
               className="btn ghost sm"
               value={selectedTenantId}
-              onChange={(event) => setSelectedTenantId(event.target.value)}
+              onChange={(event) => {
+                setSelectedAssetIds([]);
+                setSelectedKnowledgeDocumentIds([]);
+                setSelectedTenantId(event.target.value);
+              }}
             >
             {(me?.memberships ?? []).map((membership) => (
               <option key={membership.tenantId} value={membership.tenantId}>
@@ -358,6 +490,85 @@ export function SiteChatClient({ siteId }: { siteId: string }) {
           </div>
 
           <div className="chat-compose">
+            <div className="pv-grid" style={{ marginBottom: 12 }}>
+              <div className="pv-note">
+                <div className="head-row" style={{ marginBottom: 8 }}>
+                  <b>引用素材</b>
+                  <label className="btn ghost sm" style={{ cursor: "pointer" }}>
+                    {uploadingAsset ? "上传中…" : "上传"}
+                    <input
+                      type="file"
+                      style={{ display: "none" }}
+                      disabled={uploadingAsset}
+                      onChange={(event) => {
+                        const file = event.target.files?.[0] ?? null;
+                        void handleAssetUpload(file);
+                        event.currentTarget.value = "";
+                      }}
+                    />
+                  </label>
+                </div>
+                <div className="pv-stack">
+                  {assets.slice(0, 6).map((asset) => (
+                    <label key={asset.id} className="row-card" style={{ padding: "8px 10px" }}>
+                      <input
+                        type="checkbox"
+                        checked={selectedAssetIds.includes(asset.id)}
+                        onChange={(event) =>
+                          setSelectedAssetIds((current) =>
+                            event.target.checked
+                              ? [...current, asset.id]
+                              : current.filter((id) => id !== asset.id),
+                          )
+                        }
+                      />
+                      <div className="grow" style={{ marginLeft: 10 }}>
+                        <div className="nm">
+                          {asset.fileName}
+                          <span>{asset.kind}</span>
+                        </div>
+                      </div>
+                    </label>
+                  ))}
+                </div>
+              </div>
+              <div className="pv-note">
+                <div className="head-row" style={{ marginBottom: 8 }}>
+                  <b>公开知识与品牌包</b>
+                  <label className="badge line" style={{ gap: 6 }}>
+                    <input
+                      type="checkbox"
+                      checked={referenceBrandKit}
+                      onChange={(event) => setReferenceBrandKit(event.target.checked)}
+                    />
+                    引用品牌包
+                  </label>
+                </div>
+                <div className="pv-stack">
+                  {knowledgeDocuments.filter((item) => item.status === "ready").slice(0, 6).map((item) => (
+                    <label key={item.id} className="row-card" style={{ padding: "8px 10px" }}>
+                      <input
+                        type="checkbox"
+                        checked={selectedKnowledgeDocumentIds.includes(item.id)}
+                        onChange={(event) =>
+                          setSelectedKnowledgeDocumentIds((current) =>
+                            event.target.checked
+                              ? [...current, item.id]
+                              : current.filter((id) => id !== item.id),
+                          )
+                        }
+                      />
+                      <div className="grow" style={{ marginLeft: 10 }}>
+                        <div className="nm">
+                          {item.title}
+                          <span>{item.sensitivity}</span>
+                        </div>
+                      </div>
+                    </label>
+                  ))}
+                </div>
+              </div>
+            </div>
             <textarea
               className="chat-textarea"
               placeholder="例如：首屏更强调交期；新增一段认证说明；阿语版语气再正式一点。"

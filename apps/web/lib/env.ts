@@ -23,6 +23,7 @@ const envSchema = z.object({
   LOCAL_QWEN_MODEL: z.string().min(1),
   LOCAL_BGE_BASE_URL: z.string().url(),
   LOCAL_BGE_MODEL: z.string().min(1),
+  LOCAL_MODELS_DIR: z.string().min(1).optional(),
 });
 
 export type AppEnv = z.infer<typeof envSchema>;

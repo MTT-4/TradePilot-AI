@@ -1,10 +1,15 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { ContentPackStatus, JobStatus, PublishStatus } from "@prisma/client";
 import { getEnv } from "@/lib/env";
+import { createContentAsset } from "@/server/assets/service";
 import { getPrismaClient } from "@/server/db/prisma";
 import type { TenantContext } from "@/server/db/tenant-context";
 import { closeJobWorker, startJobWorker } from "@/server/jobs/worker";
 import { getTenantJobById, getJobQueue } from "@/server/jobs/service";
+import {
+  createKnowledgeDocumentFromUpload,
+  getKnowledgeDocumentRecordForTests,
+} from "@/server/kb/service";
 import {
   applyContentPackChatUpdate,
   createContentPackGenerationRequest,
@@ -150,6 +155,27 @@ function sleep(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+async function waitForDocumentStatus(params: {
+  tenantContext: TenantContext;
+  documentId: string;
+  expected: "READY";
+}) {
+  for (let attempt = 0; attempt < 60; attempt += 1) {
+    const document = await getKnowledgeDocumentRecordForTests({
+      tenantContext: params.tenantContext,
+      documentId: params.documentId,
+    });
+
+    if (document?.status === params.expected) {
+      return;
+    }
+
+    await sleep(50);
+  }
+
+  throw new Error(`Timed out waiting for ${params.expected}.`);
+}
+
 async function waitForJobStatus(params: {
   tenantContext: TenantContext;
   jobId: string;
@@ -213,8 +239,72 @@ describe("T3.0 content packs", () => {
   it(
     "generates a 9-platform content pack with tracking links and video-script constraints",
     async () => {
+      const tag = `pack-ref-${Date.now()}`;
+      const publicDocument = await createKnowledgeDocumentFromUpload({
+        tenantContext,
+        uploadedByUserId: tenantContext.userId,
+        file: new File(
+          [`Compressor ${tag} reduces downtime for GCC distributors with public proof.`],
+          "pack-public.txt",
+          { type: "text/plain" },
+        ),
+        title: `Pack public ${tag}`,
+        product: `Compressor ${tag}`,
+        market: "Middle East",
+        sensitivity: "public",
+      });
+      const internalDocument = await createKnowledgeDocumentFromUpload({
+        tenantContext,
+        uploadedByUserId: tenantContext.userId,
+        file: new File(
+          [`Internal rebate matrix ${tag} with floor price.`],
+          "pack-internal.txt",
+          { type: "text/plain" },
+        ),
+        title: `Pack internal ${tag}`,
+        product: `Compressor ${tag}`,
+        market: "Middle East",
+        sensitivity: "internal_only",
+      });
+      const referenceAsset = await createContentAsset({
+        tenantContext,
+        createdByUserId: tenantContext.userId,
+        file: new File(
+          [Buffer.from("mock trade-show visual", "utf8")],
+          `compressor-${tag}.jpg`,
+          { type: "image/jpeg" },
+        ),
+        kind: "reference",
+      });
+      await prisma.brandKit.create({
+        data: {
+          tenantId: tenantContext.tenantId,
+          createdByUserId: tenantContext.userId,
+          name: `Pack brand ${tag}`,
+          companyName: `Pack Co ${tag}`,
+          primaryColor: "#114455",
+          secondaryColor: "#E8F3F2",
+          metadata: {
+            tone: "trade-show confidence",
+          },
+        },
+      });
+
       const rules = await listPlatformRules();
       expect(rules.items).toHaveLength(9);
+
+      const worker = startJobWorker();
+      await worker.waitUntilReady();
+      await waitForDocumentStatus({
+        tenantContext,
+        documentId: publicDocument.documentId,
+        expected: "READY",
+      });
+      await waitForDocumentStatus({
+        tenantContext,
+        documentId: internalDocument.documentId,
+        expected: "READY",
+      });
 
       const queued = await createContentPackGenerationRequest({
         tenantContext,
@@ -223,11 +313,12 @@ describe("T3.0 content packs", () => {
           topic: `TS-75 screw air compressor distributor push ${Date.now()}`,
           market: "Middle East",
           locales: ["en", "ar"],
+          assetIds: [referenceAsset.id],
+          knowledgeDocumentIds: [publicDocument.documentId, internalDocument.documentId],
+          referenceBrandKit: true,
         },
       });
 
-      const worker = startJobWorker();
-      await worker.waitUntilReady();
       await waitForJobStatus({
         tenantContext,
         jobId: queued.jobId,
@@ -268,6 +359,14 @@ describe("T3.0 content packs", () => {
       expect(
         imageLikeItems.every((item) => typeof item.spec.imagePrompt === "string"),
       ).toBe(true);
+      expect(capturedPrompts.some((prompt) => prompt.includes(referenceAsset.fileName))).toBe(
+        true,
+      );
+      expect(capturedPrompts.some((prompt) => prompt.includes(`Pack Co ${tag}`))).toBe(true);
+      expect(capturedPrompts.some((prompt) => prompt.includes(`Pack public ${tag}`))).toBe(true);
+      expect(capturedPrompts.some((prompt) => prompt.includes(`Pack internal ${tag}`))).toBe(
+        false,
+      );
     },
     20000,
   );

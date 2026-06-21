@@ -7,6 +7,9 @@ import { applySiteChatUpdate } from "@/server/sites/service";
 
 const requestSchema = z.object({
   message: z.string().trim().min(1).max(2000),
+  assetIds: z.array(z.string().trim().min(1)).max(24).optional(),
+  knowledgeDocumentIds: z.array(z.string().trim().min(1)).max(24).optional(),
+  referenceBrandKit: z.boolean().optional(),
 });
 
 export const POST = auth(async (request, routeContext) => {
@@ -31,6 +34,9 @@ export const POST = auth(async (request, routeContext) => {
         siteId: params.id,
         message: input.message,
         requestedByUserId: userId,
+        assetIds: input.assetIds,
+        knowledgeDocumentIds: input.knowledgeDocumentIds,
+        referenceBrandKit: input.referenceBrandKit,
       }),
     );
   } catch (error) {

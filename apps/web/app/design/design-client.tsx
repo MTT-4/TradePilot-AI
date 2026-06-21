@@ -18,6 +18,7 @@ type DesignItem = {
   platform: string;
   mediaType: string;
   publishStatus: string;
+  plannedAt: string | null;
   contentPackId: string;
   contentPackTitle: string;
   publishRequestPending: boolean;
@@ -26,6 +27,38 @@ type DesignItem = {
 
 type DesignResponse = {
   items: DesignItem[];
+};
+
+type AssetResponse = {
+  items: Array<{
+    id: string;
+    fileName: string;
+    mimeType: string;
+    kind: string;
+    createdAt: string;
+  }>;
+};
+
+type KnowledgeDocumentsResponse = {
+  items: Array<{
+    id: string;
+    title: string;
+    status: string;
+    sensitivity: string;
+  }>;
+};
+
+type PromotionTimingResponse = {
+  countryName: string;
+  inferredCountry: string;
+  timezone: string;
+  recommendedWindows: Array<{
+    label: string;
+    reason: string;
+  }>;
+  nextRecommendedAt: string | null;
+  nextRecommendedWindow: string | null;
+  nextRecommendedReason: string | null;
 };
 
 async function fetchQueue(tenantId: string) {
@@ -43,6 +76,86 @@ async function fetchQueue(tenantId: string) {
   return (await response.json()) as DesignResponse;
 }
 
+async function fetchAssets(tenantId: string) {
+  const response = await fetch("/api/assets", {
+    headers: {
+      "X-Tenant-Id": tenantId,
+    },
+  });
+
+  if (!response.ok) {
+    const payload = await response.json().catch(() => null);
+    throw new Error(payload?.error?.message ?? "加载素材失败。");
+  }
+
+  return (await response.json()) as AssetResponse;
+}
+
+async function uploadAsset(tenantId: string, file: File) {
+  const formData = new FormData();
+  formData.set("file", file);
+  formData.set("kind", "reference");
+
+  const response = await fetch("/api/assets", {
+    method: "POST",
+    headers: {
+      "X-Tenant-Id": tenantId,
+    },
+    body: formData,
+  });
+
+  if (!response.ok) {
+    const payload = await response.json().catch(() => null);
+    throw new Error(payload?.error?.message ?? "上传素材失败。");
+  }
+}
+
+async function fetchKnowledgeDocuments(tenantId: string) {
+  const response = await fetch("/api/kb/documents", {
+    headers: {
+      "X-Tenant-Id": tenantId,
+    },
+  });
+
+  if (!response.ok) {
+    const payload = await response.json().catch(() => null);
+    throw new Error(payload?.error?.message ?? "加载知识文档失败。");
+  }
+
+  return (await response.json()) as KnowledgeDocumentsResponse;
+}
+
+async function fetchPromotionTiming(tenantId: string, market: string) {
+  const response = await fetch(
+    `/api/scheduling/promotion-timing?market=${encodeURIComponent(market)}`,
+    {
+      headers: {
+        "X-Tenant-Id": tenantId,
+      },
+    },
+  );
+
+  if (!response.ok) {
+    const payload = await response.json().catch(() => null);
+    throw new Error(payload?.error?.message ?? "加载推广时间建议失败。");
+  }
+
+  return (await response.json()) as PromotionTimingResponse;
+}
+
+function formatTime(value: string | null) {
+  if (!value) {
+    return "未排期";
+  }
+
+  return new Intl.DateTimeFormat("zh-CN", {
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+  }).format(new Date(value));
+}
+
 export function DesignClient() {
   const [me, setMe] = useState<MeResponse | null>(null);
   const [selectedTenantId, setSelectedTenantId] = useState("");
@@ -51,10 +164,19 @@ export function DesignClient() {
   const [error, setError] = useState<string | null>(null);
   const [showCreate, setShowCreate] = useState(false);
   const [creating, setCreating] = useState(false);
+  const [uploadingAsset, setUploadingAsset] = useState(false);
+  const [assets, setAssets] = useState<AssetResponse["items"]>([]);
+  const [knowledgeDocuments, setKnowledgeDocuments] = useState<
+    KnowledgeDocumentsResponse["items"]
+  >([]);
+  const [timingAdvice, setTimingAdvice] = useState<PromotionTimingResponse | null>(null);
   const [createForm, setCreateForm] = useState({
     topic: "",
     market: "",
     locales: "en,ar,ru",
+    assetIds: [] as string[],
+    knowledgeDocumentIds: [] as string[],
+    referenceBrandKit: true,
   });
 
   const currentMembership =
@@ -85,6 +207,9 @@ export function DesignClient() {
           topic: createForm.topic.trim(),
           market: createForm.market.trim() || undefined,
           locales: locales.length > 0 ? locales : ["en"],
+          assetIds: createForm.assetIds,
+          knowledgeDocumentIds: createForm.knowledgeDocumentIds,
+          referenceBrandKit: createForm.referenceBrandKit,
         }),
       });
       if (!response.ok) {
@@ -97,6 +222,25 @@ export function DesignClient() {
       setError(createError instanceof Error ? createError.message : "新建内容包失败。");
     } finally {
       setCreating(false);
+    }
+  }
+
+  async function handleAssetUpload(file: File | null) {
+    if (!selectedTenantId || !file) {
+      return;
+    }
+
+    setUploadingAsset(true);
+    setError(null);
+
+    try {
+      await uploadAsset(selectedTenantId, file);
+      const payload = await fetchAssets(selectedTenantId);
+      setAssets(payload.items);
+    } catch (uploadError) {
+      setError(uploadError instanceof Error ? uploadError.message : "上传素材失败。");
+    } finally {
+      setUploadingAsset(false);
     }
   }
 
@@ -152,11 +296,17 @@ export function DesignClient() {
 
     let active = true;
 
-    void fetchQueue(selectedTenantId)
-      .then((payload) => {
+    void Promise.all([
+      fetchQueue(selectedTenantId),
+      fetchAssets(selectedTenantId),
+      fetchKnowledgeDocuments(selectedTenantId),
+    ])
+      .then(([queuePayload, assetsPayload, documentsPayload]) => {
         if (active) {
           setError(null);
-          setItems(payload.items);
+          setItems(queuePayload.items);
+          setAssets(assetsPayload.items);
+          setKnowledgeDocuments(documentsPayload.items);
         }
       })
       .catch((loadError) => {
@@ -174,6 +324,30 @@ export function DesignClient() {
       active = false;
     };
   }, [selectedTenantId]);
+
+  useEffect(() => {
+    if (!selectedTenantId || !createForm.market.trim()) {
+      return;
+    }
+
+    let active = true;
+
+    void fetchPromotionTiming(selectedTenantId, createForm.market.trim())
+      .then((payload) => {
+        if (active) {
+          setTimingAdvice(payload);
+        }
+      })
+      .catch(() => {
+        if (active) {
+          setTimingAdvice(null);
+        }
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [createForm.market, selectedTenantId]);
 
   const pendingCount = items.filter((item) => item.publishRequestPending).length;
 
@@ -204,6 +378,12 @@ export function DesignClient() {
               value={selectedTenantId}
               onChange={(event) => {
                 setLoading(true);
+                setTimingAdvice(null);
+                setCreateForm((current) => ({
+                  ...current,
+                  assetIds: [],
+                  knowledgeDocumentIds: [],
+                }));
                 setSelectedTenantId(event.target.value);
               }}
             >
@@ -235,7 +415,10 @@ export function DesignClient() {
               <label>目标市场（可选）</label>
               <input
                 value={createForm.market}
-                onChange={(e) => setCreateForm({ ...createForm, market: e.target.value })}
+                onChange={(e) => {
+                  setTimingAdvice(null);
+                  setCreateForm({ ...createForm, market: e.target.value });
+                }}
                 placeholder="例如：中东"
               />
             </div>
@@ -246,6 +429,113 @@ export function DesignClient() {
                 onChange={(e) => setCreateForm({ ...createForm, locales: e.target.value })}
                 placeholder="en,ar,ru"
               />
+            </div>
+          </div>
+          {timingAdvice ? (
+            <div className="card" style={{ padding: "12px 14px", marginTop: 12 }}>
+              <div className="head-row" style={{ marginBottom: 6 }}>
+                <b>推荐推广时间</b>
+                <span className="badge line">
+                  {timingAdvice.countryName} · {timingAdvice.inferredCountry}
+                </span>
+              </div>
+              <div className="sub">
+                下一个推荐时段：{timingAdvice.nextRecommendedWindow ?? "暂无"}。
+                {timingAdvice.nextRecommendedReason ? ` ${timingAdvice.nextRecommendedReason}` : ""}
+              </div>
+            </div>
+          ) : null}
+          <div className="pv-grid" style={{ marginTop: 12 }}>
+            <div className="pv-card">
+              <div className="head-row" style={{ marginBottom: 8 }}>
+                <b>素材引用</b>
+                <label className="btn ghost sm" style={{ cursor: "pointer" }}>
+                  {uploadingAsset ? "上传中…" : "上传素材"}
+                  <input
+                    type="file"
+                    style={{ display: "none" }}
+                    disabled={uploadingAsset}
+                    onChange={(event) => {
+                      const file = event.target.files?.[0] ?? null;
+                      void handleAssetUpload(file);
+                      event.currentTarget.value = "";
+                    }}
+                  />
+                </label>
+              </div>
+              <div className="pv-stack">
+                {assets.length ? (
+                  assets.slice(0, 8).map((asset) => (
+                    <label key={asset.id} className="row-card" style={{ padding: "10px 12px" }}>
+                      <input
+                        type="checkbox"
+                        checked={createForm.assetIds.includes(asset.id)}
+                        onChange={(event) =>
+                          setCreateForm((current) => ({
+                            ...current,
+                            assetIds: event.target.checked
+                              ? [...current.assetIds, asset.id]
+                              : current.assetIds.filter((id) => id !== asset.id),
+                          }))
+                        }
+                      />
+                      <div className="grow" style={{ marginLeft: 10 }}>
+                        <div className="nm">
+                          {asset.fileName}
+                          <span>{asset.kind}</span>
+                        </div>
+                      </div>
+                    </label>
+                  ))
+                ) : (
+                  <div className="sub">还没有素材，可先上传产品图、包装图、参考海报。</div>
+                )}
+              </div>
+            </div>
+            <div className="pv-card">
+              <div className="head-row" style={{ marginBottom: 8 }}>
+                <b>公开知识与品牌包</b>
+                <label className="badge line" style={{ gap: 6 }}>
+                  <input
+                    type="checkbox"
+                    checked={createForm.referenceBrandKit}
+                    onChange={(event) =>
+                      setCreateForm((current) => ({
+                        ...current,
+                        referenceBrandKit: event.target.checked,
+                      }))
+                    }
+                  />
+                  引用品牌包
+                </label>
+              </div>
+              <div className="pv-stack">
+                {knowledgeDocuments.filter((item) => item.status === "ready").slice(0, 8).map((item) => (
+                  <label key={item.id} className="row-card" style={{ padding: "10px 12px" }}>
+                    <input
+                      type="checkbox"
+                      checked={createForm.knowledgeDocumentIds.includes(item.id)}
+                      onChange={(event) =>
+                        setCreateForm((current) => ({
+                          ...current,
+                          knowledgeDocumentIds: event.target.checked
+                            ? [...current.knowledgeDocumentIds, item.id]
+                            : current.knowledgeDocumentIds.filter((id) => id !== item.id),
+                        }))
+                      }
+                    />
+                    <div className="grow" style={{ marginLeft: 10 }}>
+                      <div className="nm">
+                        {item.title}
+                        <span>{item.sensitivity}</span>
+                      </div>
+                    </div>
+                  </label>
+                ))}
+                {!knowledgeDocuments.filter((item) => item.status === "ready").length ? (
+                  <div className="sub">当前没有可引用的 READY 知识文档。</div>
+                ) : null}
+              </div>
             </div>
           </div>
           <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 12 }}>
@@ -316,6 +606,9 @@ export function DesignClient() {
             </div>
             <div className="pk-body">
               <div className="pk-spec">{item.contentPackTitle}</div>
+              <div className="sub" style={{ marginBottom: 8 }}>
+                推荐排期：{formatTime(item.plannedAt)}
+              </div>
               <div style={{ marginBottom: 8 }}>
                 <span className={`st ${item.publishStatus}`}>{statusLabel(item.publishStatus)}</span>
                 {item.publishRequestPending ? (

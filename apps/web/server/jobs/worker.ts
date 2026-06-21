@@ -130,6 +130,9 @@ async function queueProcessor(bullJob: Job<QueuePayload>) {
                     | "vk_clips"
                     | "rutube"
                   >;
+                  assetIds?: string[];
+                  knowledgeDocumentIds?: string[];
+                  referenceBrandKit?: boolean;
                 },
                 reportProgress: reporter.reportProgress,
               })
@@ -145,6 +148,15 @@ async function queueProcessor(bullJob: Job<QueuePayload>) {
                   style: string;
                   cta: string;
                 },
+                assetIds: Array.isArray(bullJob.data.input.assetIds)
+                  ? bullJob.data.input.assetIds.map((item) => String(item))
+                  : [],
+                knowledgeDocumentIds: Array.isArray(
+                  bullJob.data.input.knowledgeDocumentIds,
+                )
+                  ? bullJob.data.input.knowledgeDocumentIds.map((item) => String(item))
+                  : [],
+                referenceBrandKit: Boolean(bullJob.data.input.referenceBrandKit),
                 reportProgress: reporter.reportProgress,
               })
           : await processDemoJob(bullJob, reporter);

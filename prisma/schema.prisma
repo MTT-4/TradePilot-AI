@@ -47,6 +47,13 @@ enum FileKind {
   OTHER    @map("other")
 }
 
+enum ContentAssetKind {
+  REFERENCE @map("reference")
+  PRODUCT   @map("product")
+  BRAND     @map("brand")
+  DOCUMENT  @map("document")
+}
+
 enum KnowledgeDocumentStatus {
   UPLOADED  @map("uploaded")
   PARSING   @map("parsing")
@@ -248,6 +255,7 @@ model Tenant {
   memberships    Membership[]
   brandKits      BrandKit[]
   files          File[]
+  contentAssets  ContentAsset[]
   jobs           Job[]
   auditLogs      AuditLog[]
   modelInvokes   ModelInvocation[]
@@ -292,6 +300,7 @@ model User {
   updatedAt        DateTime        @updatedAt @map("updated_at")
   memberships      Membership[]
   uploadedFiles    File[]          @relation("FileUploadedBy")
+  contentAssets    ContentAsset[]  @relation("ContentAssetCreator")
   requestedJobs    Job[]           @relation("JobRequestedBy")
   auditLogs        AuditLog[]      @relation("AuditActor")
   modelInvocations ModelInvocation[]
@@ -389,6 +398,25 @@ model File {
   @@unique([tenantId, objectKey])
   @@index([tenantId])
   @@map("files")
+}
+
+model ContentAsset {
+  id              String           @id @default(cuid())
+  tenantId        String           @map("tenant_id")
+  createdByUserId String?          @map("created_by_user_id")
+  kind            ContentAssetKind
+  fileName        String           @map("file_name")
+  mimeType        String           @map("mime_type")
+  sizeBytes       Int              @map("size_bytes")
+  objectKey       String           @map("object_key")
+  createdAt       DateTime         @default(now()) @map("created_at")
+  updatedAt       DateTime         @updatedAt @map("updated_at")
+  tenant          Tenant           @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  createdBy       User?            @relation("ContentAssetCreator", fields: [createdByUserId], references: [id], onDelete: SetNull)
+
+  @@unique([tenantId, objectKey])
+  @@index([tenantId])
+  @@map("content_assets")
 }
 
 model Job {

@@ -100,6 +100,17 @@ type UsageResponse = {
   }>;
 };
 
+type LocalModelScanResponse = {
+  baseDirLabel: string;
+  items: Array<{
+    fileName: string;
+    relativePath: string;
+    sizeBytes: number;
+    kind: "chat" | "embedding" | "unknown";
+    suggestedAlias: string;
+  }>;
+};
+
 type BrandFormState = {
   name: string;
   companyName: string;
@@ -194,6 +205,21 @@ async function fetchUsage(tenantId: string) {
   }
 
   return (await response.json()) as UsageResponse;
+}
+
+async function fetchLocalModels(tenantId: string) {
+  const response = await fetch("/api/settings/local-models", {
+    headers: {
+      "X-Tenant-Id": tenantId,
+    },
+  });
+
+  if (!response.ok) {
+    const payload = await response.json().catch(() => null);
+    throw new Error(payload?.error?.message ?? "扫描本地模型失败。");
+  }
+
+  return (await response.json()) as LocalModelScanResponse;
 }
 
 function formatTime(value: string | null) {
@@ -295,6 +321,8 @@ export function SettingsClient() {
   const [membersSubmitting, setMembersSubmitting] = useState(false);
   const [brandSubmitting, setBrandSubmitting] = useState(false);
   const [modelPolicySubmitting, setModelPolicySubmitting] = useState(false);
+  const [localModelsLoading, setLocalModelsLoading] = useState(false);
+  const [localModels, setLocalModels] = useState<LocalModelScanResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
 
@@ -590,6 +618,26 @@ export function SettingsClient() {
     }
   }
 
+  async function handleScanLocalModels() {
+    if (!selectedTenantId) {
+      return;
+    }
+
+    setLocalModelsLoading(true);
+    setError(null);
+    setSuccess(null);
+
+    try {
+      const payload = await fetchLocalModels(selectedTenantId);
+      setLocalModels(payload);
+      setSuccess(`已扫描 ${payload.items.length} 个本地模型文件。`);
+    } catch (scanError) {
+      setError(scanError instanceof Error ? scanError.message : "扫描本地模型失败。");
+    } finally {
+      setLocalModelsLoading(false);
+    }
+  }
+
   useEffect(() => {
     let active = true;
 
@@ -724,6 +772,7 @@ export function SettingsClient() {
               setLoading(true);
               setOverview(null);
               setUsage(null);
+              setLocalModels(null);
               setBrandForm(createEmptyBrandForm());
               setModelPolicyForm(createDefaultModelPolicyForm());
               setSuccess(null);
@@ -1312,6 +1361,19 @@ export function SettingsClient() {
                 </div>
                 <div className="pv-panel">
                   <h4>模型名覆盖</h4>
+                  <div className="head-row" style={{ marginTop: 10, marginBottom: 10 }}>
+                    <div className="sub">
+                      从本机 `~/AI/models` 或 `LOCAL_MODELS_DIR` 扫描 GGUF 文件，并把建议别名回填到策略。
+                    </div>
+                    <button
+                      type="button"
+                      className="btn ghost sm"
+                      disabled={localModelsLoading}
+                      onClick={() => void handleScanLocalModels()}
+                    >
+                      {localModelsLoading ? "扫描中…" : "扫描本地模型"}
+                    </button>
+                  </div>
                   <div className="pv-stack" style={{ marginTop: 10 }}>
                     <div className="pv-note">
                       <b>LOCAL_QWEN_MODEL</b>
@@ -1359,6 +1421,69 @@ export function SettingsClient() {
                       </p>
                     </div>
                   </div>
+                  {localModels ? (
+                    <div className="pv-note" style={{ marginTop: 12 }}>
+                      <div className="head-row" style={{ marginBottom: 8 }}>
+                        <b>扫描结果</b>
+                        <span className="badge line">
+                          {localModels.items.length} 个 · {localModels.baseDirLabel}
+                        </span>
+                      </div>
+                      <div className="pv-stack">
+                        {localModels.items.length ? (
+                          localModels.items.map((item) => (
+                            <div
+                              key={item.relativePath}
+                              className="row-card"
+                              style={{ padding: "10px 12px" }}
+                            >
+                              <div className="grow">
+                                <div className="nm">
+                                  {item.suggestedAlias}
+                                  <span>{item.kind}</span>
+                                </div>
+                                <div className="sub" style={{ marginTop: 3 }}>
+                                  {item.relativePath}
+                                </div>
+                              </div>
+                              <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                                {item.kind === "chat" ? (
+                                  <button
+                                    type="button"
+                                    className="btn ghost sm"
+                                    onClick={() =>
+                                      setModelPolicyForm((current) => ({
+                                        ...current,
+                                        localQwenModel: item.suggestedAlias,
+                                      }))
+                                    }
+                                  >
+                                    用作 Qwen
+                                  </button>
+                                ) : null}
+                                {item.kind === "embedding" ? (
+                                  <button
+                                    type="button"
+                                    className="btn ghost sm"
+                                    onClick={() =>
+                                      setModelPolicyForm((current) => ({
+                                        ...current,
+                                        localBgeModel: item.suggestedAlias,
+                                      }))
+                                    }
+                                  >
+                                    用作 BGE
+                                  </button>
+                                ) : null}
+                              </div>
+                            </div>
+                          ))
+                        ) : (
+                          <div className="sub">当前目录下没有扫描到 GGUF 模型文件。</div>
+                        )}
+                      </div>
+                    </div>
+                  ) : null}
                   <div className="head-row" style={{ marginTop: 14 }}>
                     <div className="sub">
                       保存后会影响新的模型调用路由与模型名选择；隐私文本仍强制走本地 Qwen。

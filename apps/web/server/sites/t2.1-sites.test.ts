@@ -1,6 +1,7 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { JobStatus, KnowledgeDocumentStatus, LocaleCode, SiteStatus } from "@prisma/client";
 import { getEnv } from "@/lib/env";
+import { createContentAsset } from "@/server/assets/service";
 import { getTenantJobById, getJobQueue } from "@/server/jobs/service";
 import { closeJobWorker, startJobWorker } from "@/server/jobs/worker";
 import { getPrismaClient } from "@/server/db/prisma";
@@ -464,6 +465,29 @@ describe("T2.1 site generation", () => {
         documentId: internalDocument.documentId,
         expected: KnowledgeDocumentStatus.READY,
       });
+      const referenceAsset = await createContentAsset({
+        tenantContext,
+        createdByUserId: tenantContext.userId,
+        file: new File(
+          [Buffer.from("mock product hero", "utf8")],
+          `solar-pump-${tag}.png`,
+          { type: "image/png" },
+        ),
+        kind: "product",
+      });
+      await getPrismaClient().brandKit.create({
+        data: {
+          tenantId: tenantContext.tenantId,
+          createdByUserId: tenantContext.userId,
+          name: `Brand kit ${tag}`,
+          companyName: `TradePilot ${tag}`,
+          primaryColor: "#0C5C56",
+          secondaryColor: "#E9F4F2",
+          metadata: {
+            tone: "precision export",
+          },
+        },
+      });
 
       const queued = await createSiteGenerationRequest({
         tenantContext,
@@ -475,6 +499,9 @@ describe("T2.1 site generation", () => {
           style: "industrial clean",
           cta: "Request distributor pricing",
         },
+        assetIds: [referenceAsset.id],
+        knowledgeDocumentIds: [publicDocument.documentId, internalDocument.documentId],
+        referenceBrandKit: true,
       });
 
       await waitForJobStatus({
@@ -498,6 +525,10 @@ describe("T2.1 site generation", () => {
       ).toBe(false);
       expect(capturedPrompts.some((prompt) => prompt.includes(publicTitle))).toBe(true);
       expect(capturedPrompts.some((prompt) => prompt.includes(internalTitle))).toBe(false);
+      expect(
+        capturedPrompts.some((prompt) => prompt.includes(referenceAsset.fileName)),
+      ).toBe(true);
+      expect(capturedPrompts.some((prompt) => prompt.includes(`TradePilot ${tag}`))).toBe(true);
       expect(capturedTranslateRequests.some((item) => item.target === "ar")).toBe(true);
       expect(capturedTranslateRequests.some((item) => item.target === "ru")).toBe(true);
       expect(

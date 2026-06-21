@@ -20,6 +20,7 @@ export async function getDesignQueue(params: {
         platform: true,
         mediaType: true,
         publishStatus: true,
+        plannedAt: true,
         contentPackId: true,
         contentPack: {
           select: {
@@ -48,6 +49,7 @@ export async function getDesignQueue(params: {
       platform: item.platform.toLowerCase(),
       mediaType: item.mediaType.toLowerCase(),
       publishStatus: item.publishStatus.toLowerCase(),
+      plannedAt: item.plannedAt?.toISOString() ?? null,
       contentPackId: item.contentPackId,
       contentPackTitle: item.contentPack.title,
       publishRequestPending: pendingItemIds.has(item.id),

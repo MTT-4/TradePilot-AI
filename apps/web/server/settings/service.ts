@@ -6,6 +6,7 @@ import type { TenantContext } from "@/server/db/tenant-context";
 import { getEnv } from "@/lib/env";
 
 export const MODEL_POLICY_KEY = "model_policy";
+export const PROMOTION_HOLIDAYS_KEY = "promotion_holidays";
 
 export const modelPolicySchema = z.object({
   privateTextRoute: z.literal("local_qwen"),
@@ -18,6 +19,20 @@ export const modelPolicySchema = z.object({
 });
 
 export type ModelPolicyConfig = z.infer<typeof modelPolicySchema>;
+
+const holidayEntrySchema = z.object({
+  date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  name: z.string().trim().min(1).max(120),
+  advice: z.enum(["avoid", "leverage"]),
+  note: z.string().trim().max(160).optional(),
+});
+
+export const promotionHolidaySettingsSchema = z.record(
+  z.string().trim().regex(/^[A-Z]{2}$/),
+  z.array(holidayEntrySchema).max(40),
+);
+
+export type PromotionHolidaySettings = z.infer<typeof promotionHolidaySettingsSchema>;
 
 export const brandKitUpdateSchema = z.object({
   name: z.string().trim().min(1),
@@ -59,6 +74,20 @@ export function getDefaultModelPolicy() {
   } satisfies ModelPolicyConfig;
 }
 
+function normalizeHolidaySettings(value: PromotionHolidaySettings) {
+  return Object.fromEntries(
+    Object.entries(value).map(([country, holidays]) => [
+      country,
+      holidays.map((holiday) => ({
+        date: holiday.date,
+        name: holiday.name.trim(),
+        advice: holiday.advice,
+        note: normalizeOptionalText(holiday.note) ?? undefined,
+      })),
+    ]),
+  ) satisfies PromotionHolidaySettings;
+}
+
 export async function getResolvedModelPolicy(tenantContext: TenantContext) {
   const tenantPrisma = getTenantPrisma(tenantContext);
   const record = await tenantPrisma.tenantSetting.findFirst({
@@ -84,6 +113,107 @@ export async function getResolvedModelPolicy(tenantContext: TenantContext) {
   });
 
   return parsed.success ? parsed.data : base;
+}
+
+export async function getPromotionHolidaySettings(tenantContext: TenantContext) {
+  const tenantPrisma = getTenantPrisma(tenantContext);
+  const record = await tenantPrisma.tenantSetting.findFirst({
+    where: {
+      key: PROMOTION_HOLIDAYS_KEY,
+    },
+    select: {
+      value: true,
+      updatedAt: true,
+    },
+  });
+
+  const parsed = promotionHolidaySettingsSchema.safeParse(
+    record?.value && typeof record.value === "object" && !Array.isArray(record.value)
+      ? (record.value as Record<string, unknown>)
+      : {},
+  );
+
+  return {
+    items: parsed.success ? parsed.data : {},
+    updatedAt: record?.updatedAt.toISOString() ?? null,
+  };
+}
+
+export async function upsertPromotionHolidaySettings(params: {
+  tenantContext: TenantContext;
+  actorUserId: string;
+  input: PromotionHolidaySettings;
+}) {
+  if (
+    params.tenantContext.role !== MembershipRole.OWNER &&
+    params.tenantContext.role !== MembershipRole.ADMIN
+  ) {
+    throw new ApiError(
+      403,
+      "FORBIDDEN",
+      "Only owner or admin can update promotion holidays.",
+    );
+  }
+
+  const tenantPrisma = getTenantPrisma(params.tenantContext);
+  const existing = await tenantPrisma.tenantSetting.findFirst({
+    where: {
+      key: PROMOTION_HOLIDAYS_KEY,
+    },
+    select: {
+      id: true,
+      value: true,
+    },
+  });
+  const payload = normalizeHolidaySettings(
+    promotionHolidaySettingsSchema.parse(params.input),
+  );
+
+  const record = existing
+    ? await tenantPrisma.tenantSetting.update({
+        where: {
+          id: existing.id,
+        },
+        data: {
+          value: payload as Prisma.InputJsonValue,
+          updatedByUserId: params.actorUserId,
+        },
+        select: {
+          id: true,
+          updatedAt: true,
+        },
+      })
+    : await tenantPrisma.tenantSetting.create({
+        data: {
+          tenantId: params.tenantContext.tenantId,
+          key: PROMOTION_HOLIDAYS_KEY,
+          value: payload as Prisma.InputJsonValue,
+          updatedByUserId: params.actorUserId,
+        },
+        select: {
+          id: true,
+          updatedAt: true,
+        },
+      });
+
+  await tenantPrisma.auditLog.create({
+    data: {
+      tenantId: params.tenantContext.tenantId,
+      actorUserId: params.actorUserId,
+      action: "promotion_holidays_updated",
+      entityType: "tenant_setting",
+      entityId: record.id,
+      metadata: {
+        before: existing?.value ?? null,
+        after: payload,
+      },
+    },
+  });
+
+  return {
+    items: payload,
+    updatedAt: record.updatedAt.toISOString(),
+  };
 }
 
 export async function upsertModelPolicy(params: {

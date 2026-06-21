@@ -1,6 +1,8 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import Link from "next/link";
+import { useSearchParams } from "next/navigation";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { canEdit } from "@/app/_components/hitl-meta";
 import {
   fetchCurrentMe,
@@ -21,11 +23,17 @@ type TrackingLinkItem = {
   utmContent: string | null;
   botFilterEnabled: boolean;
   createdAt: string;
+  campaign: {
+    id: string;
+    name: string;
+  } | null;
   contentItem: {
     id: string;
     title: string;
     locale: string;
     publishStatus: string;
+    contentPackId: string;
+    contentPackTitle: string;
   };
   stats: {
     clicksTotal: number;
@@ -172,25 +180,70 @@ async function patchTrackingLink(
 }
 
 export function TrackingLinksClient() {
+  const searchParams = useSearchParams();
   const [me, setMe] = useState<MeResponse | null>(null);
   const [selectedTenantId, setSelectedTenantId] = useState("");
   const [items, setItems] = useState<TrackingLinkItem[]>([]);
-  const [selectedTrackingId, setSelectedTrackingId] = useState("");
+  const [selectedTrackingId, setSelectedTrackingId] = useState(
+    searchParams.get("trackingLinkId")?.trim() ?? "",
+  );
+  const [platformFilter, setPlatformFilter] = useState(
+    searchParams.get("platform")?.trim().toLowerCase() || "all",
+  );
+  const [campaignFilter, setCampaignFilter] = useState(
+    searchParams.get("campaignId")?.trim() || "all",
+  );
+  const [contentPackFilter, setContentPackFilter] = useState(
+    searchParams.get("contentPackId")?.trim() || "all",
+  );
   const [form, setForm] = useState<TrackingLinkFormState>(EMPTY_FORM);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  const selectedTrackingIdRef = useRef(selectedTrackingId);
 
   const currentMembership =
     me?.memberships.find((item) => item.tenantId === selectedTenantId) ?? null;
   const canEditCurrentTenant = canEdit(currentMembership?.role);
+  const filteredItems = useMemo(() => {
+    return items.filter((item) => {
+      if (platformFilter !== "all" && item.platform !== platformFilter) {
+        return false;
+      }
+      if (campaignFilter !== "all" && item.campaign?.id !== campaignFilter) {
+        return false;
+      }
+      if (contentPackFilter !== "all" && item.contentItem.contentPackId !== contentPackFilter) {
+        return false;
+      }
+
+      return true;
+    });
+  }, [campaignFilter, contentPackFilter, items, platformFilter]);
+  const effectiveSelectedTrackingId =
+    selectedTrackingId ||
+    filteredItems[0]?.id ||
+    "";
   const activeItem = useMemo(
-    () => items.find((item) => item.id === selectedTrackingId) ?? null,
-    [items, selectedTrackingId],
+    () =>
+      filteredItems.find((item) => item.id === effectiveSelectedTrackingId) ??
+      filteredItems[0] ??
+      null,
+    [effectiveSelectedTrackingId, filteredItems],
   );
-  const resolvedPreview = useMemo(() => buildResolvedUrlPreview(form), [form]);
-  const formDirty = isDirty(activeItem, form);
+  const activeForm =
+    activeItem && activeItem.id === selectedTrackingId
+      ? form
+      : activeItem
+        ? toFormState(activeItem)
+        : EMPTY_FORM;
+  const resolvedPreview = useMemo(() => buildResolvedUrlPreview(activeForm), [activeForm]);
+  const formDirty = isDirty(activeItem, activeForm);
+
+  useEffect(() => {
+    selectedTrackingIdRef.current = selectedTrackingId;
+  }, [selectedTrackingId]);
 
   useEffect(() => {
     let active = true;
@@ -238,7 +291,10 @@ export function TrackingLinksClient() {
           return;
         }
 
-        const nextSelectedItem = payload.items[0] ?? null;
+        const nextSelectedItem =
+          payload.items.find((item) => item.id === selectedTrackingIdRef.current) ??
+          payload.items[0] ??
+          null;
 
         setError(null);
         setItems(payload.items);
@@ -281,7 +337,7 @@ export function TrackingLinksClient() {
     setNotice(null);
 
     try {
-      const updated = await patchTrackingLink(selectedTenantId, activeItem.id, form);
+      const updated = await patchTrackingLink(selectedTenantId, activeItem.id, activeForm);
 
       setItems((current) =>
         current.map((item) =>
@@ -399,8 +455,61 @@ export function TrackingLinksClient() {
       </div>
 
       <div className="head-row" style={{ marginTop: 20, marginBottom: 10 }}>
-        <h3 style={{ fontSize: 16 }}>最近 50 条追踪链接</h3>
-        <span className="badge line">{loading ? "加载中…" : `${items.length} 条`}</span>
+        <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+          <select
+            className="btn ghost sm"
+            value={platformFilter}
+            onChange={(event) => setPlatformFilter(event.target.value)}
+          >
+            <option value="all">全部平台</option>
+            {Array.from(new Set(items.map((item) => item.platform))).map((platform) => (
+              <option key={platform} value={platform}>
+                {platform.toUpperCase()}
+              </option>
+            ))}
+          </select>
+          <select
+            className="btn ghost sm"
+            value={campaignFilter}
+            onChange={(event) => setCampaignFilter(event.target.value)}
+          >
+            <option value="all">全部活动</option>
+            {Array.from(
+              new Map(
+                items
+                  .filter((item) => item.campaign)
+                  .map((item) => [item.campaign!.id, item.campaign!]),
+              ).values(),
+            ).map((campaign) => (
+              <option key={campaign.id} value={campaign.id}>
+                {campaign.name}
+              </option>
+            ))}
+          </select>
+          <select
+            className="btn ghost sm"
+            value={contentPackFilter}
+            onChange={(event) => setContentPackFilter(event.target.value)}
+          >
+            <option value="all">全部内容包</option>
+            {Array.from(
+              new Map(
+                items.map((item) => [
+                  item.contentItem.contentPackId,
+                  {
+                    id: item.contentItem.contentPackId,
+                    title: item.contentItem.contentPackTitle,
+                  },
+                ]),
+              ).values(),
+            ).map((contentPack) => (
+              <option key={contentPack.id} value={contentPack.id}>
+                {contentPack.title}
+              </option>
+            ))}
+          </select>
+        </div>
+        <span className="badge line">{loading ? "加载中…" : `${filteredItems.length} / ${items.length} 条`}</span>
       </div>
 
       <div className="card" style={{ padding: "6px 18px" }}>
@@ -416,7 +525,7 @@ export function TrackingLinksClient() {
             </tr>
           </thead>
           <tbody>
-            {items.map((item) => (
+            {filteredItems.map((item) => (
               <tr key={item.id}>
                 <td>
                   <span className="badge line">{item.platform.toUpperCase()}</span>
@@ -429,6 +538,12 @@ export function TrackingLinksClient() {
                   <b>{item.contentItem.title}</b>
                   <div className="sub" style={{ marginTop: 4 }}>
                     {item.contentItem.locale.toUpperCase()} · {item.contentItem.publishStatus}
+                  </div>
+                  <div className="sub" style={{ marginTop: 4 }}>
+                    内容包：{item.contentItem.contentPackTitle}
+                  </div>
+                  <div className="sub">
+                    活动：{item.campaign?.name ?? "未关联"}
                   </div>
                 </td>
                 <td>
@@ -452,22 +567,30 @@ export function TrackingLinksClient() {
                   </div>
                 </td>
                 <td>
-                  <button
-                    className="btn ghost sm"
-                    onClick={() => {
-                      selectItem(item);
-                    }}
-                    type="button"
-                  >
-                    {item.id === selectedTrackingId ? "当前" : canEditCurrentTenant ? "编辑" : "查看"}
-                  </button>
+                  <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                    <button
+                      className="btn ghost sm"
+                      onClick={() => {
+                        selectItem(item);
+                      }}
+                      type="button"
+                    >
+                      {item.id === selectedTrackingId ? "当前" : canEditCurrentTenant ? "编辑" : "查看"}
+                    </button>
+                    <Link
+                      className="btn ghost sm"
+                      href={`/content-packs/${item.contentItem.contentPackId}/chat`}
+                    >
+                      打开内容包
+                    </Link>
+                  </div>
                 </td>
               </tr>
             ))}
-            {!items.length ? (
+            {!filteredItems.length ? (
               <tr>
                 <td colSpan={6}>
-                  <div className="sub" style={{ padding: "12px 0" }}>当前没有追踪链接。</div>
+                  <div className="sub" style={{ padding: "12px 0" }}>当前筛选条件下没有追踪链接。</div>
                 </td>
               </tr>
             ) : null}
@@ -548,9 +671,13 @@ export function TrackingLinksClient() {
                   <label htmlFor="tracking-target-url">目标地址</label>
                   <input
                     id="tracking-target-url"
-                    value={form.targetUrl}
+                    value={activeForm.targetUrl}
                     onChange={(event) => {
-                      setForm((current) => ({ ...current, targetUrl: event.target.value }));
+                      setSelectedTrackingId(activeItem.id);
+                      setForm((current) => ({
+                        ...(activeItem.id === selectedTrackingId ? current : activeForm),
+                        targetUrl: event.target.value,
+                      }));
                     }}
                     disabled={!canEditCurrentTenant || saving}
                   />
@@ -560,9 +687,13 @@ export function TrackingLinksClient() {
                   <label htmlFor="tracking-utm-source">utm_source</label>
                   <input
                     id="tracking-utm-source"
-                    value={form.utmSource}
+                    value={activeForm.utmSource}
                     onChange={(event) => {
-                      setForm((current) => ({ ...current, utmSource: event.target.value }));
+                      setSelectedTrackingId(activeItem.id);
+                      setForm((current) => ({
+                        ...(activeItem.id === selectedTrackingId ? current : activeForm),
+                        utmSource: event.target.value,
+                      }));
                     }}
                     disabled={!canEditCurrentTenant || saving}
                   />
@@ -572,9 +703,13 @@ export function TrackingLinksClient() {
                   <label htmlFor="tracking-utm-medium">utm_medium</label>
                   <input
                     id="tracking-utm-medium"
-                    value={form.utmMedium}
+                    value={activeForm.utmMedium}
                     onChange={(event) => {
-                      setForm((current) => ({ ...current, utmMedium: event.target.value }));
+                      setSelectedTrackingId(activeItem.id);
+                      setForm((current) => ({
+                        ...(activeItem.id === selectedTrackingId ? current : activeForm),
+                        utmMedium: event.target.value,
+                      }));
                     }}
                     disabled={!canEditCurrentTenant || saving}
                   />
@@ -584,9 +719,13 @@ export function TrackingLinksClient() {
                   <label htmlFor="tracking-utm-campaign">utm_campaign</label>
                   <input
                     id="tracking-utm-campaign"
-                    value={form.utmCampaign}
+                    value={activeForm.utmCampaign}
                     onChange={(event) => {
-                      setForm((current) => ({ ...current, utmCampaign: event.target.value }));
+                      setSelectedTrackingId(activeItem.id);
+                      setForm((current) => ({
+                        ...(activeItem.id === selectedTrackingId ? current : activeForm),
+                        utmCampaign: event.target.value,
+                      }));
                     }}
                     disabled={!canEditCurrentTenant || saving}
                   />
@@ -596,9 +735,13 @@ export function TrackingLinksClient() {
                   <label htmlFor="tracking-utm-content">utm_content</label>
                   <input
                     id="tracking-utm-content"
-                    value={form.utmContent}
+                    value={activeForm.utmContent}
                     onChange={(event) => {
-                      setForm((current) => ({ ...current, utmContent: event.target.value }));
+                      setSelectedTrackingId(activeItem.id);
+                      setForm((current) => ({
+                        ...(activeItem.id === selectedTrackingId ? current : activeForm),
+                        utmContent: event.target.value,
+                      }));
                     }}
                     disabled={!canEditCurrentTenant || saving}
                     placeholder="可留空"
@@ -618,10 +761,11 @@ export function TrackingLinksClient() {
               >
                 <input
                   type="checkbox"
-                  checked={form.botFilterEnabled}
+                  checked={activeForm.botFilterEnabled}
                   onChange={(event) => {
+                    setSelectedTrackingId(activeItem.id);
                     setForm((current) => ({
-                      ...current,
+                      ...(activeItem.id === selectedTrackingId ? current : activeForm),
                       botFilterEnabled: event.target.checked,
                     }));
                   }}
@@ -639,6 +783,7 @@ export function TrackingLinksClient() {
                     className="btn ghost sm"
                     type="button"
                     onClick={() => {
+                      setSelectedTrackingId(activeItem.id);
                       setForm(toFormState(activeItem));
                       setNotice(null);
                     }}

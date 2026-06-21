@@ -119,6 +119,15 @@ export const HOLIDAYS: Record<string, Holiday[]> = {
   DE: [{ date: "2026-10-03", name: "德国统一日", advice: "avoid" }],
 };
 
+export function getPromotionHolidays(
+  overrides?: Partial<Record<string, Holiday[]>>,
+) {
+  return {
+    ...HOLIDAYS,
+    ...(overrides ?? {}),
+  };
+}
+
 const COUNTRY_ALIASES: Record<string, string[]> = {
   AE: ["AE", "UAE", "EMIRATES", "DUBAI", "ABU DHABI", "阿联酋", "迪拜", "中东", "MIDDLE EAST", "MENA", "GCC"],
   SA: ["SA", "KSA", "SAUDI", "SAUDI ARABIA", "沙特", "利雅得"],
@@ -297,6 +306,7 @@ export function recommendPromotionTiming(params: {
   country: string;
   now?: Date;
   horizonDays?: number;
+  holidays?: Partial<Record<string, Holiday[]>>;
 }): PromotionTimingResult {
   const code = params.country.trim().toUpperCase();
   const profile = COUNTRY_PROFILES[code];
@@ -327,7 +337,8 @@ export function recommendPromotionTiming(params: {
   const horizonEnd = addDays(now, horizonDays);
   const nowIso = toIsoDate(now);
   const endIso = toIsoDate(horizonEnd);
-  const upcomingHolidays = (HOLIDAYS[code] ?? [])
+  const holidaySource = getPromotionHolidays(params.holidays);
+  const upcomingHolidays = (holidaySource[code] ?? [])
     .filter((holiday) => holiday.date >= nowIso && holiday.date <= endIso)
     .sort((a, b) => a.date.localeCompare(b.date))
     .map((holiday) => ({

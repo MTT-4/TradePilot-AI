@@ -650,6 +650,9 @@ export function ContentPackChatClient({ packId }: { packId: string }) {
                           <path d="M10 13a5 5 0 0 0 7 0l3-3a5 5 0 0 0-7-7l-1 1" />
                         </svg>
                         {item.trackingLink.slug}
+                        <a href={`/tracking-links?contentPackId=${pack?.pack.id ?? ""}&platform=${item.platform}`}>
+                          管理
+                        </a>
                         <button
                           type="button"
                           onClick={() => void navigator.clipboard.writeText(item.trackingLink?.resolvedUrl ?? "")}

@@ -111,6 +111,27 @@ type LocalModelScanResponse = {
   }>;
 };
 
+type PromotionHolidayEntry = {
+  date: string;
+  name: string;
+  advice: "avoid" | "leverage";
+  note?: string | null;
+};
+
+type PromotionHolidayResponse = {
+  items: Record<string, PromotionHolidayEntry[]>;
+  updatedAt: string | null;
+};
+
+const SUPPORTED_PROMOTION_COUNTRIES = [
+  { code: "AE", label: "阿联酋" },
+  { code: "SA", label: "沙特" },
+  { code: "BR", label: "巴西" },
+  { code: "MX", label: "墨西哥" },
+  { code: "RU", label: "俄罗斯" },
+  { code: "DE", label: "德国" },
+] as const;
+
 type BrandFormState = {
   name: string;
   companyName: string;
@@ -222,6 +243,21 @@ async function fetchLocalModels(tenantId: string) {
   return (await response.json()) as LocalModelScanResponse;
 }
 
+async function fetchPromotionHolidays(tenantId: string) {
+  const response = await fetch("/api/settings/promotion-holidays", {
+    headers: {
+      "X-Tenant-Id": tenantId,
+    },
+  });
+
+  if (!response.ok) {
+    const payload = await response.json().catch(() => null);
+    throw new Error(payload?.error?.message ?? "加载节假日设置失败。");
+  }
+
+  return (await response.json()) as PromotionHolidayResponse;
+}
+
 function formatTime(value: string | null) {
   if (!value) {
     return "—";
@@ -323,6 +359,9 @@ export function SettingsClient() {
   const [modelPolicySubmitting, setModelPolicySubmitting] = useState(false);
   const [localModelsLoading, setLocalModelsLoading] = useState(false);
   const [localModels, setLocalModels] = useState<LocalModelScanResponse | null>(null);
+  const [promotionHolidays, setPromotionHolidays] = useState<Record<string, PromotionHolidayEntry[]>>({});
+  const [promotionHolidayUpdatedAt, setPromotionHolidayUpdatedAt] = useState<string | null>(null);
+  const [promotionHolidaySubmitting, setPromotionHolidaySubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
 
@@ -638,6 +677,41 @@ export function SettingsClient() {
     }
   }
 
+  async function handleSavePromotionHolidays() {
+    if (!selectedTenantId) {
+      return;
+    }
+
+    setPromotionHolidaySubmitting(true);
+    setError(null);
+    setSuccess(null);
+
+    try {
+      const response = await fetch("/api/settings/promotion-holidays", {
+        method: "PATCH",
+        headers: {
+          "content-type": "application/json",
+          "X-Tenant-Id": selectedTenantId,
+        },
+        body: JSON.stringify(promotionHolidays),
+      });
+
+      if (!response.ok) {
+        const payload = await response.json().catch(() => null);
+        throw new Error(payload?.error?.message ?? "更新节假日设置失败。");
+      }
+
+      const payload = (await response.json()) as PromotionHolidayResponse;
+      setPromotionHolidays(payload.items);
+      setPromotionHolidayUpdatedAt(payload.updatedAt);
+      setSuccess("节假日设置已更新。");
+    } catch (saveError) {
+      setError(saveError instanceof Error ? saveError.message : "更新节假日设置失败。");
+    } finally {
+      setPromotionHolidaySubmitting(false);
+    }
+  }
+
   useEffect(() => {
     let active = true;
 
@@ -715,8 +789,12 @@ export function SettingsClient() {
 
     let active = true;
 
-    void Promise.all([fetchSettingsOverview(selectedTenantId), fetchUsage(selectedTenantId)])
-      .then(([overviewPayload, usagePayload]) => {
+    void Promise.all([
+      fetchSettingsOverview(selectedTenantId),
+      fetchUsage(selectedTenantId),
+      fetchPromotionHolidays(selectedTenantId),
+    ])
+      .then(([overviewPayload, usagePayload, holidayPayload]) => {
         if (!active) {
           return;
         }
@@ -732,6 +810,8 @@ export function SettingsClient() {
           logoUrl: overviewPayload.brandKit?.logoUrl ?? "",
         });
         setModelPolicyForm(overviewPayload.modelPolicy);
+        setPromotionHolidays(holidayPayload.items);
+        setPromotionHolidayUpdatedAt(holidayPayload.updatedAt);
       })
       .catch((loadError) => {
         if (active) {
@@ -773,6 +853,8 @@ export function SettingsClient() {
               setOverview(null);
               setUsage(null);
               setLocalModels(null);
+              setPromotionHolidays({});
+              setPromotionHolidayUpdatedAt(null);
               setBrandForm(createEmptyBrandForm());
               setModelPolicyForm(createDefaultModelPolicyForm());
               setSuccess(null);
@@ -843,6 +925,7 @@ export function SettingsClient() {
           <a href="#members">成员权限</a>
           <a href="#brand">品牌资料</a>
           <a href="#models">模型路由</a>
+          <a href="#holidays">节假日</a>
           <a href="#usage">模型用量</a>
           <a href="#roles">权限矩阵</a>
           <a href="#audit">审计基线</a>
@@ -1514,6 +1597,189 @@ export function SettingsClient() {
                 }}
               >
                 当前角色只能看 RBAC 和审计说明，模型配置由 Owner / Admin 管理。
+              </div>
+            )}
+          </div>
+
+          <div className="card set-block" id="holidays">
+            <div className="head-row" style={{ marginBottom: 10 }}>
+              <div>
+                <h3>推广节假日维护</h3>
+                <div className="sub">
+                  覆盖推荐投放时段里的节假日提醒。留空则使用系统起步数据；修改后 `/design` 的提醒会读取这里。
+                </div>
+              </div>
+              <span className="badge line">
+                {promotionHolidayUpdatedAt ? `更新于 ${formatTime(promotionHolidayUpdatedAt)}` : "未覆盖"}
+              </span>
+            </div>
+
+            {canManageCompliance ? (
+              <>
+                <div className="pv-stack">
+                  {SUPPORTED_PROMOTION_COUNTRIES.map((country) => {
+                    const entries = promotionHolidays[country.code] ?? [];
+
+                    return (
+                      <div key={country.code} className="pv-note">
+                        <div className="head-row" style={{ marginBottom: 8 }}>
+                          <b>
+                            {country.label} · {country.code}
+                          </b>
+                          <button
+                            type="button"
+                            className="btn ghost sm"
+                            onClick={() =>
+                              setPromotionHolidays((current) => ({
+                                ...current,
+                                [country.code]: [
+                                  ...(current[country.code] ?? []),
+                                  {
+                                    date: "",
+                                    name: "",
+                                    advice: "avoid",
+                                    note: "",
+                                  },
+                                ],
+                              }))
+                            }
+                          >
+                            新增节假日
+                          </button>
+                        </div>
+                        <div className="pv-stack">
+                          {entries.length ? (
+                            entries.map((entry, index) => (
+                              <div
+                                key={`${country.code}-${index}`}
+                                style={{
+                                  display: "grid",
+                                  gridTemplateColumns: "140px minmax(0, 1.2fr) 140px minmax(0, 1fr) auto",
+                                  gap: 10,
+                                  alignItems: "end",
+                                }}
+                              >
+                                <div className="field" style={{ marginBottom: 0 }}>
+                                  <label>日期</label>
+                                  <input
+                                    value={entry.date}
+                                    onChange={(event) =>
+                                      setPromotionHolidays((current) => ({
+                                        ...current,
+                                        [country.code]: (current[country.code] ?? []).map((item, itemIndex) =>
+                                          itemIndex === index
+                                            ? { ...item, date: event.target.value }
+                                            : item,
+                                        ),
+                                      }))
+                                    }
+                                    placeholder="2026-12-02"
+                                  />
+                                </div>
+                                <div className="field" style={{ marginBottom: 0 }}>
+                                  <label>名称</label>
+                                  <input
+                                    value={entry.name}
+                                    onChange={(event) =>
+                                      setPromotionHolidays((current) => ({
+                                        ...current,
+                                        [country.code]: (current[country.code] ?? []).map((item, itemIndex) =>
+                                          itemIndex === index
+                                            ? { ...item, name: event.target.value }
+                                            : item,
+                                        ),
+                                      }))
+                                    }
+                                    placeholder="例如：国庆日"
+                                  />
+                                </div>
+                                <div className="field" style={{ marginBottom: 0 }}>
+                                  <label>建议</label>
+                                  <select
+                                    value={entry.advice}
+                                    onChange={(event) =>
+                                      setPromotionHolidays((current) => ({
+                                        ...current,
+                                        [country.code]: (current[country.code] ?? []).map((item, itemIndex) =>
+                                          itemIndex === index
+                                            ? {
+                                                ...item,
+                                                advice: event.target.value as "avoid" | "leverage",
+                                              }
+                                            : item,
+                                        ),
+                                      }))
+                                    }
+                                  >
+                                    <option value="avoid">建议规避</option>
+                                    <option value="leverage">建议借势</option>
+                                  </select>
+                                </div>
+                                <div className="field" style={{ marginBottom: 0 }}>
+                                  <label>备注</label>
+                                  <input
+                                    value={entry.note ?? ""}
+                                    onChange={(event) =>
+                                      setPromotionHolidays((current) => ({
+                                        ...current,
+                                        [country.code]: (current[country.code] ?? []).map((item, itemIndex) =>
+                                          itemIndex === index
+                                            ? { ...item, note: event.target.value }
+                                            : item,
+                                        ),
+                                      }))
+                                    }
+                                    placeholder="例如：伊斯兰历需按年核对"
+                                  />
+                                </div>
+                                <button
+                                  type="button"
+                                  className="btn ghost sm"
+                                  onClick={() =>
+                                    setPromotionHolidays((current) => ({
+                                      ...current,
+                                      [country.code]: (current[country.code] ?? []).filter(
+                                        (_, itemIndex) => itemIndex !== index,
+                                      ),
+                                    }))
+                                  }
+                                >
+                                  删除
+                                </button>
+                              </div>
+                            ))
+                          ) : (
+                            <div className="sub">未设置租户覆盖值，当前沿用系统起步数据。</div>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+                <div className="head-row" style={{ marginTop: 14 }}>
+                  <div className="sub">
+                    建议每年年初核对一次，尤其是伊斯兰历相关节日。
+                  </div>
+                  <button
+                    type="button"
+                    className="btn primary sm"
+                    disabled={promotionHolidaySubmitting}
+                    onClick={() => void handleSavePromotionHolidays()}
+                  >
+                    {promotionHolidaySubmitting ? "保存中…" : "保存节假日"}
+                  </button>
+                </div>
+              </>
+            ) : (
+              <div
+                className="card"
+                style={{
+                  padding: "12px 14px",
+                  background: "var(--surface-2)",
+                  borderStyle: "dashed",
+                }}
+              >
+                当前角色只能查看治理说明，节假日覆盖由 Owner / Admin 维护。
               </div>
             )}
           </div>

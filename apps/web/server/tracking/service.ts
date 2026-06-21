@@ -273,12 +273,24 @@ export async function listTrackingLinks(
       utmContent: true,
       botFilterEnabled: true,
       createdAt: true,
+      campaign: {
+        select: {
+          id: true,
+          name: true,
+        },
+      },
       contentItem: {
         select: {
           id: true,
           title: true,
           locale: true,
           publishStatus: true,
+          contentPack: {
+            select: {
+              id: true,
+              title: true,
+            },
+          },
         },
       },
       clickEvents: {
@@ -312,11 +324,19 @@ export async function listTrackingLinks(
       utmContent: item.utmContent,
       botFilterEnabled: item.botFilterEnabled,
       createdAt: item.createdAt.toISOString(),
+      campaign: item.campaign
+        ? {
+            id: item.campaign.id,
+            name: item.campaign.name,
+          }
+        : null,
       contentItem: {
         id: item.contentItem.id,
         title: item.contentItem.title,
         locale: item.contentItem.locale.toLowerCase(),
         publishStatus: item.contentItem.publishStatus.toLowerCase(),
+        contentPackId: item.contentItem.contentPack.id,
+        contentPackTitle: item.contentItem.contentPack.title,
       },
       stats: {
         clicksTotal: item.clickEvents.length,

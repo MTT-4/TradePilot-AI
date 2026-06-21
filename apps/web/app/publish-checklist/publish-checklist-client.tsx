@@ -398,9 +398,17 @@ export function PublishChecklistClient() {
                 ) : null}
               </div>
             </div>
-            <Link className="btn ghost sm" href={item.editUrl}>
-              打开内容包
-            </Link>
+            <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+              <Link className="btn ghost sm" href={item.editUrl}>
+                打开内容包
+              </Link>
+              <Link
+                className="btn ghost sm"
+                href={`/tracking-links?contentPackId=${item.contentPackId}&platform=${item.platform}`}
+              >
+                追踪链接
+              </Link>
+            </div>
           </div>
         ))}
         {!contentWaiting.length ? (

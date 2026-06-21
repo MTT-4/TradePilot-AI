@@ -619,6 +619,12 @@ export function DesignClient() {
                 <Link className="link" href={item.editUrl}>
                   打开内容包
                 </Link>
+                <Link
+                  className="link"
+                  href={`/tracking-links?contentPackId=${item.contentPackId}&platform=${item.platform}`}
+                >
+                  追踪链接
+                </Link>
                 <span style={{ marginLeft: "auto" }}>
                   {item.publishStatus === "published" ? (
                     <span className="badge good">已发布</span>

@@ -113,13 +113,22 @@ a8b03ea fix: harden ci and settings operations
   （询盘正文+机器译、草稿可编辑保存、拒绝、确认发送走 `/api/hitl/[id]/approve`）；侧栏已指向 `/replies`。
 - 仅剩可选优化：草稿"拒绝"后是否触发重新起草、引用知识点击溯源等，按需再做。
 
-### 4.5 缺口：询盘 / 邮件 / 线索详情视图（需 DB 环境）
+### 4.5 询盘 / 邮件 / 线索详情视图 —— ✅ 已完成
 
-现状：无 inquiry 列表接口、无线索详情页；CRM 仅有 leads 表 + 最新询盘摘要；inbound-email 入库后前端不可见。待做：
-
-1. 新增询盘列表接口（如 `GET /api/crm/inquiries`，租户+角色鉴权）与"询盘线索池"视图（原型有，可并入 `/crm` 或独立页）。
-2. 线索详情页/抽屉：展示来源归因、历史询盘、活动（`/api/crm/leads/[id]`、`/api/crm/activities` 已存在），并提供进入首响起草的入口。
-3. 邮件询盘可见：把 inbound-email 来源的询盘并入上述列表（按 sourceType 标注）。
+- 接口已就位：
+  - `GET /api/crm/inquiries`
+  - `GET /api/crm/leads/[id]`
+  - `GET /api/crm/activities`
+- 前端已在 `/crm` 收口：
+  - 询盘线索池列表
+  - 线索详情抽屉
+  - 来源归因 / 历史询盘 / 活动
+  - 进入 AI 首响起草的入口
+- inbound-email 来源的询盘已并入询盘列表，并按 `sourceType` 标注可见。
+- 相关服务与测试：
+  - `apps/web/server/crm/service.ts`
+  - `apps/web/app/crm/crm-client.tsx`
+  - `apps/web/server/crm/t4.3-crm.test.ts`
 
 ### 4.6 缺口（低优先 / 部分属 M7）
 

@@ -7,6 +7,7 @@ import {
   recommendPromotionTiming,
   suggestNextPromotionTime,
 } from "@/server/scheduling/promotion-timing";
+import { getPromotionHolidaySettings } from "@/server/settings/service";
 
 export const GET = auth(async (request) => {
   try {
@@ -16,7 +17,7 @@ export const GET = auth(async (request) => {
       throw new ApiError(401, "UNAUTHENTICATED", "Login required.");
     }
 
-    await requireTenantAccess(
+    const { context } = await requireTenantAccess(
       request.headers,
       userId,
       MembershipRole.VIEWER,
@@ -35,8 +36,10 @@ export const GET = auth(async (request) => {
       );
     }
 
+    const holidaySettings = await getPromotionHolidaySettings(context);
     const timing = recommendPromotionTiming({
       country: inferredCountry,
+      holidays: holidaySettings.items,
     });
     const nextRecommended = suggestNextPromotionTime({
       country: inferredCountry,

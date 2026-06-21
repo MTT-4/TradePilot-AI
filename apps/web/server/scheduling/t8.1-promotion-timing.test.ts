@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
 import {
+  getPromotionHolidays,
   recommendPromotionTiming,
   COUNTRY_PROFILES,
   inferPromotionCountry,
@@ -78,5 +79,26 @@ describe("T8.1 promotion timing recommender", () => {
     expect(next?.plannedAt.getTime()).toBeGreaterThan(
       new Date("2026-06-01T00:00:00Z").getTime(),
     );
+  });
+
+  it("allows tenant holiday overrides to replace default reminders", () => {
+    const holidays = getPromotionHolidays({
+      AE: [
+        {
+          date: "2026-11-25",
+          name: "租户自定义促销节点",
+          advice: "leverage",
+        },
+      ],
+    });
+    const result = recommendPromotionTiming({
+      country: "AE",
+      now: new Date("2026-11-20T00:00:00Z"),
+      horizonDays: 10,
+      holidays,
+    });
+
+    expect(result.upcomingHolidays).toHaveLength(1);
+    expect(result.upcomingHolidays[0]?.name).toBe("租户自定义促销节点");
   });
 });

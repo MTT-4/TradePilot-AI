@@ -35,6 +35,29 @@ TradePilot AI · 本地优先的 AI 外贸营销获客平台（Next.js App Route
 > 详见 `docs/codex_tasks/_指令前缀.md` 与 `docs/codex_tasks/TradePilot_Skill_Tool_落地执行计划_对齐现状版.md`。
 > 现状：G1–G5 本地 skill 已实现（15 个 `/api/skills/*`），无需重做；codex 用于 review、增强或新需求。
 
+## 协作与一致性公约（Claude 与 Codex 共同遵守）
+
+为避免多个 AI 各写各的、文件越改越乱，所有改动遵守以下约定：
+
+1. **唯一规约 = 本文件**。新增/补充任何功能前先读本 AGENTS.md；规则变化只改这里，不另起一套。
+2. **统一目录与命名**（新功能必须落到这套结构，不要发明新位置）：
+   - 业务逻辑：`apps/web/server/<domain>/*.ts`
+   - 接口：`apps/web/app/api/skills/<kebab-name>/route.ts`
+   - 页面：`apps/web/app/<kebab-name>/page.tsx` + `<kebab-name>-client.tsx`，并在 `app-shell.tsx` 加导航
+   - 契约文档：`docs/skills/<snake_name>/`（SKILL.md + input/output schema + examples）
+   - 路由用 kebab-case，skill/契约名用 snake_case，二者一一对应。
+3. **数据与模型只走收口**：DB 一律 `getTenantPrisma`（自动注入 tenantId）；模型一律 `model-gateway`，
+   隐私数据传 `sensitivity=INTERNAL_ONLY`。不要新建第二套数据/模型访问方式。
+4. **改既有文件前先声明**：除上面"新增文件"外，要动现有文件先说清改哪些、为什么；
+   owner-scope/limit 等公共校验复用 `apps/web/server/skills/access.ts`，不要各写一份。
+5. **唯一启动入口 = `npm run dev:local`**（`scripts/run-local-dev.sh`）：已含 docker + bge-m3 + Qwen 检查
+   + 任务 worker + Web。不要再新增并行的 dev 启动脚本；`scripts/run-skills-local.sh` 只做 check/commit/smoke 辅助。
+6. **Git 提交归人/Codex 在本机做**（sandbox 删不掉 .git 锁，无法可靠提交）。提交前必过
+   `npm run lint && npm run typecheck`；用 `git add -A` 防漏；不要 push 除非明确要求。
+7. **完成即报清单**：每次改动输出"新增文件 / 修改文件 / 校验结果"，方便对账。
+8. **本地化**：UI 标签用中文；国际标准术语（FOB/CIF/EXW/GDPR/PIPL/UTM/HS Code/Token）保留原文，
+   枚举/接口的 value 不翻译。
+
 ## 参考
 
 - 高保真原型：`docs/00_原始资料/TradePilot_完整高保真UI.html`

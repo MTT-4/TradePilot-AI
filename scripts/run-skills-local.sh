@@ -49,18 +49,14 @@ case "$ACTION" in
   up)
     command -v nvm >/dev/null 2>&1 && nvm use || echo "（跳过 nvm，请确认 Node 22）"
     [ -f .env ] || cp .env.example .env
-    echo "==> 启动本地依赖（Postgres / Redis / MinIO）"
+    echo "==> 首次准备：起依赖并写入演示数据（seed）"
     docker compose up -d
-    echo "==> 生成 Prisma client 并写入演示数据"
     npm run prisma:generate
     npm run prisma:seed
-    echo
-    echo "提醒：另开一个终端按 README 起本地 Qwen（llama-server --port 8080 ...），"
-    echo "      否则 inquiry-detection / 回复生成等会 fail-closed（隐私优先，不外发）。"
-    echo
-    echo "==> 启动 Web（http://localhost:3100）"
     echo "    登录：owner-a@tradepilot.local / TradePilot@2026"
-    npm run dev
+    echo
+    echo "==> 交给唯一启动入口 dev:local（含 docker + bge-m3 + Qwen 检查 + 任务 worker + Web）"
+    exec npm run dev:local
     ;;
 
   smoke)

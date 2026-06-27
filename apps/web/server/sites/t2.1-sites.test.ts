@@ -1,5 +1,6 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { JobStatus, KnowledgeDocumentStatus, LocaleCode, SiteStatus } from "@prisma/client";
+import { ApiError } from "@/server/api/errors";
 import { getEnv } from "@/lib/env";
 import { createContentAsset } from "@/server/assets/service";
 import { getTenantJobById, getJobQueue } from "@/server/jobs/service";
@@ -23,6 +24,7 @@ import {
   generateSiteAutofillCandidates,
   updateAutofillCandidate,
 } from "@/server/sites/service";
+import { normalizeSiteLocalesInput } from "@/lib/site-locales";
 
 const originalFetch = globalThis.fetch;
 const capturedPrompts: string[] = [];
@@ -31,6 +33,12 @@ const capturedTranslateRequests: Array<{
   target?: string;
   text: string;
 }> = [];
+const capturedLocalTranslateRequests: Array<{
+  source?: string;
+  target?: string;
+  text: string;
+}> = [];
+let googleTranslateShouldFail = false;
 
 function buildMockEmbedding(text: string) {
   const vector = Array.from({ length: 1024 }, () => 0);
@@ -180,6 +188,7 @@ function installMockSiteFetch() {
   const env = getEnv();
   const embeddingsUrl = `${env.LOCAL_BGE_BASE_URL.replace(/\/$/, "")}/embeddings`;
   const chatUrl = `${env.OPENAI_BASE_URL.replace(/\/$/, "")}/chat/completions`;
+  const localChatUrl = `${env.LOCAL_QWEN_BASE_URL.replace(/\/$/, "")}/chat/completions`;
   const translateUrl = env.GOOGLE_TRANSLATE_BASE_URL;
 
   globalThis.fetch = (async (input, init) => {
@@ -292,6 +301,9 @@ function installMockSiteFetch() {
     }
 
     if (url.startsWith(translateUrl)) {
+      if (googleTranslateShouldFail) {
+        throw new TypeError("fetch failed");
+      }
       const rawBody =
         typeof init?.body === "string"
           ? init.body
@@ -317,6 +329,48 @@ function installMockSiteFetch() {
               },
             ],
           },
+        }),
+        {
+          status: 200,
+          headers: {
+            "content-type": "application/json",
+          },
+        },
+      );
+    }
+
+    if (url === localChatUrl) {
+      const rawBody =
+        typeof init?.body === "string"
+          ? init.body
+          : init?.body instanceof Uint8Array
+            ? Buffer.from(init.body).toString("utf8")
+            : "";
+      const payload = rawBody ? JSON.parse(rawBody) : {};
+      const source = typeof payload.messages?.[1]?.content === "string"
+        ? String(payload.messages[1].content).match(/Source locale:\s*([^\n]+)/i)?.[1]?.trim()
+        : undefined;
+      const target = typeof payload.messages?.[1]?.content === "string"
+        ? String(payload.messages[1].content).match(/Target locale:\s*([^\n]+)/i)?.[1]?.trim()
+        : undefined;
+      const text = typeof payload.messages?.[1]?.content === "string"
+        ? String(payload.messages[1].content).split("\n\n").pop() ?? ""
+        : "";
+      capturedLocalTranslateRequests.push({
+        source,
+        target,
+        text,
+      });
+
+      return new Response(
+        JSON.stringify({
+          choices: [
+            {
+              message: {
+                content: `${target ? `[${target}] ` : ""}${text}`,
+              },
+            },
+          ],
         }),
         {
           status: 200,
@@ -387,6 +441,10 @@ async function waitForJobStatus(params: {
 }
 
 describe("T2.1 site generation", () => {
+  it("normalizes common locale aliases for site creation", () => {
+    expect(normalizeSiteLocalesInput(["cn", "us", "zh", "en-US"])).toEqual(["zh", "en"]);
+  });
+
   let tenantContext: {
     tenantId: string;
     userId: string;
@@ -495,7 +553,7 @@ describe("T2.1 site generation", () => {
         brief: {
           market: `GCC-${tag}`,
           product: `Solar pump ${tag}`,
-          locales: ["en", "ar", "ru"],
+          locales: ["zh", "en"],
           style: "industrial clean",
           cta: "Request distributor pricing",
         },
@@ -512,8 +570,8 @@ describe("T2.1 site generation", () => {
 
       const detail = await getSiteProjectDetail(tenantContext, queued.siteId);
       expect(detail.project.status).toBe("draft");
-      expect(detail.locales.map((item) => item.locale)).toEqual(["en", "ar", "ru"]);
-      expect(detail.locales.find((item) => item.locale === "ar")?.direction).toBe("rtl");
+      expect(detail.locales.map((item) => item.locale)).toEqual(["zh", "en"]);
+      expect(detail.locales.find((item) => item.locale === "zh")?.direction).toBe("ltr");
       expect(detail.locales.every((item) => item.urlPath.endsWith(`/${item.locale}`))).toBe(true);
       expect(detail.locales.every((item) => item.urlPath.startsWith("/site/"))).toBe(true);
       expect(detail.version?.citations.length).toBeGreaterThan(0);
@@ -529,23 +587,23 @@ describe("T2.1 site generation", () => {
         capturedPrompts.some((prompt) => prompt.includes(referenceAsset.fileName)),
       ).toBe(true);
       expect(capturedPrompts.some((prompt) => prompt.includes(`TradePilot ${tag}`))).toBe(true);
-      expect(capturedTranslateRequests.some((item) => item.target === "ar")).toBe(true);
-      expect(capturedTranslateRequests.some((item) => item.target === "ru")).toBe(true);
+      expect(capturedTranslateRequests.some((item) => item.target === "en")).toBe(true);
+      expect(capturedLocalTranslateRequests.some((item) => item.target === "zh")).toBe(true);
       expect(
         (
-          detail.locales.find((item) => item.locale === "ar")?.translatedContent as {
+          detail.locales.find((item) => item.locale === "zh")?.translatedContent as {
             headline: string;
           }
-        ).headline.startsWith("[ar]"),
+        ).headline.startsWith("[zh]"),
       ).toBe(true);
       expect(
         (
-          detail.locales.find((item) => item.locale === "ru")?.translatedContent as {
+          detail.locales.find((item) => item.locale === "en")?.translatedContent as {
             headline: string;
           }
-        ).headline.startsWith("[ru]"),
+        ).headline.startsWith("[en]"),
       ).toBe(true);
-      expect(detail.version?.hreflangs).toHaveLength(3);
+      expect(detail.version?.hreflangs).toHaveLength(2);
       expect(detail.version?.previewChecks.map((item) => item.key)).toEqual([
         "seo",
         "geo",
@@ -556,14 +614,79 @@ describe("T2.1 site generation", () => {
 
       const publicPage = await getPublicSiteLocalePageData({
         slug: detail.project.slug,
-        locale: "ar",
+        locale: "zh",
         allowDraft: true,
       });
-      expect(publicPage.locale.direction).toBe("rtl");
+      expect(publicPage.locale.direction).toBe("ltr");
       expect(publicPage.locale.quickAnswer.length).toBeGreaterThan(0);
-      expect(publicPage.absoluteUrl.endsWith(`/site/${detail.project.slug}/ar`)).toBe(true);
+      expect(publicPage.absoluteUrl.endsWith(`/site/${detail.project.slug}/zh`)).toBe(true);
       expect(publicPage.version?.robots.allowAiBots).toBe(true);
       expect(JSON.stringify(publicPage.jsonLd)).toContain("FAQPage");
+    },
+    20000,
+  );
+
+  it(
+    "falls back to local qwen translation when Google Translate is unavailable",
+    async () => {
+      const tag = `google-fallback-${Date.now()}`;
+      googleTranslateShouldFail = true;
+
+      try {
+        const publicDocument = await createKnowledgeDocumentFromUpload({
+          tenantContext,
+          uploadedByUserId: tenantContext.userId,
+          file: new File(
+            [Buffer.from(`Public fallback source ${tag}`, "utf8")],
+            "fallback-public.txt",
+            { type: "text/plain" },
+          ),
+          title: `Fallback source ${tag}`,
+          product: `Fallback pump ${tag}`,
+          market: `MENA-${tag}`,
+          sensitivity: "public",
+        });
+
+        startJobWorker();
+        await waitForDocumentStatus({
+          tenantContext,
+          documentId: publicDocument.documentId,
+          expected: KnowledgeDocumentStatus.READY,
+        });
+
+        const queued = await createSiteGenerationRequest({
+          tenantContext,
+          requestedByUserId: tenantContext.userId,
+          brief: {
+            market: `MENA-${tag}`,
+            product: `Fallback pump ${tag}`,
+            locales: ["en", "ar"],
+            style: "industrial clean",
+            cta: "Request distributor pricing",
+          },
+          knowledgeDocumentIds: [publicDocument.documentId],
+        });
+
+        await waitForJobStatus({
+          tenantContext,
+          jobId: queued.jobId,
+          expected: JobStatus.SUCCEEDED,
+        });
+
+        const detail = await getSiteProjectDetail(tenantContext, queued.siteId);
+        expect(detail.project.status).toBe("draft");
+        expect(detail.locales.map((item) => item.locale)).toEqual(["en", "ar"]);
+        expect(
+          (
+            detail.locales.find((item) => item.locale === "ar")?.translatedContent as {
+              headline: string;
+            }
+          ).headline.startsWith("[ar]"),
+        ).toBe(true);
+        expect(capturedLocalTranslateRequests.some((item) => item.target === "ar")).toBe(true);
+      } finally {
+        googleTranslateShouldFail = false;
+      }
     },
     20000,
   );
@@ -937,5 +1060,83 @@ describe("T2.1 site generation", () => {
     expect(created?.localeCount).toBe(0);
     expect(created?.locales).toEqual([]);
     expect(created?.defaultLocale).toBe("en");
+  });
+
+  it("loads site detail even when a project has no locales yet", async () => {
+    const prisma = getPrismaClient();
+    const tag = `site-empty-detail-${Date.now()}`;
+    const project = await prisma.siteProject.create({
+      data: {
+        tenantId: tenantContext.tenantId,
+        createdByUserId: tenantContext.userId,
+        name: `Empty detail ${tag}`,
+        slug: `empty-detail-${tag}`,
+        market: "MENA",
+        product: "TS-75",
+        style: "conversion focused",
+        cta: "Request a quote",
+        defaultLocale: LocaleCode.EN,
+        status: SiteStatus.DRAFT,
+      },
+      select: {
+        id: true,
+      },
+    });
+
+    const detail = await getSiteProjectDetail(tenantContext, project.id);
+
+    expect(detail.project.id).toBe(project.id);
+    expect(detail.locales).toEqual([]);
+    expect(detail.version).toBeNull();
+    expect(detail.versionHistory).toEqual([]);
+  });
+
+  it("returns a validation error for chat and autofill when a project has no locales yet", async () => {
+    const prisma = getPrismaClient();
+    const tag = `site-empty-actions-${Date.now()}`;
+    const project = await prisma.siteProject.create({
+      data: {
+        tenantId: tenantContext.tenantId,
+        createdByUserId: tenantContext.userId,
+        name: `Empty actions ${tag}`,
+        slug: `empty-actions-${tag}`,
+        market: "MENA",
+        product: "TS-75",
+        style: "conversion focused",
+        cta: "Request a quote",
+        defaultLocale: LocaleCode.EN,
+        status: SiteStatus.DRAFT,
+      },
+      select: {
+        id: true,
+      },
+    });
+
+    await expect(
+      applySiteChatUpdate({
+        tenantContext,
+        siteId: project.id,
+        message: "Add a trust block.",
+        requestedByUserId: tenantContext.userId,
+        fetchImpl: globalThis.fetch,
+      }),
+    ).rejects.toMatchObject({
+      status: 422,
+      code: "VALIDATION",
+      message: "当前站点还没有 locale 草稿，请先生成至少一个语言版本。",
+    } satisfies Partial<ApiError>);
+
+    await expect(
+      generateSiteAutofillCandidates({
+        tenantContext,
+        siteId: project.id,
+        requestedByUserId: tenantContext.userId,
+        fetchImpl: globalThis.fetch,
+      }),
+    ).rejects.toMatchObject({
+      status: 422,
+      code: "VALIDATION",
+      message: "当前站点还没有 locale 草稿，请先生成至少一个语言版本。",
+    } satisfies Partial<ApiError>);
   });
 });

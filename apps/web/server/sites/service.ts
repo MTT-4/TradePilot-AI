@@ -15,6 +15,7 @@ import {
 } from "@prisma/client";
 import { z } from "zod";
 import { getEnv } from "@/lib/env";
+import { normalizeSiteLocalesInput, siteLocaleValues } from "@/lib/site-locales";
 import { ApiError } from "@/server/api/errors";
 import { hasMinimumRole } from "@/server/auth/rbac";
 import type { TenantContext } from "@/server/db/tenant-context";
@@ -25,7 +26,7 @@ import { enqueueTenantJob } from "@/server/jobs/service";
 import { approveReplySendTask } from "@/server/replies/service";
 import { filterLivePendingHitlTasks } from "@/server/hitl/filter-pending";
 
-const apiLocaleSchema = z.enum(["en", "ar", "ru", "fr", "de", "pt"]);
+const apiLocaleSchema = z.enum(siteLocaleValues);
 
 const siteBriefSchema = z.object({
   market: z.string().trim().min(1).max(120),
@@ -242,6 +243,21 @@ function getSourceLocale(brief: SiteBriefInput) {
   return brief.locales[0] ?? "en";
 }
 
+function normalizeSiteBriefInput(brief: {
+  market: string;
+  product: string;
+  locales: string[];
+  style: string;
+  cta: string;
+}) {
+  const locales = normalizeSiteLocalesInput(brief.locales);
+
+  return siteBriefSchema.parse({
+    ...brief,
+    locales: locales.length ? locales : ["en"],
+  });
+}
+
 function buildGlossaryTerms(brief: SiteBriefInput) {
   return Array.from(
     new Set(
@@ -295,21 +311,6 @@ function decodeHtmlEntities(text: string) {
     .replace(/&#39;/g, "'");
 }
 
-function buildRetrievalQuery(brief: SiteBriefInput, extraPrompt?: string) {
-  return sanitizePublicPromptText(
-    [
-    brief.product,
-    brief.market,
-    brief.style,
-    brief.cta,
-    extraPrompt,
-    "landing page value proposition faq proof points export buyers",
-  ]
-    .filter(Boolean)
-    .join(" "),
-  );
-}
-
 function sanitizePublicPromptText(text: string) {
   return text
     .replace(/\binternal[-_\s]?only\b/gi, "restricted")
@@ -327,11 +328,18 @@ async function searchPublicKnowledge(params: {
   knowledgeDocumentIds?: string[];
 }) {
   const tenantPrisma = getTenantPrisma(params.tenantContext);
-  const tokens = buildRetrievalQuery(params.brief, params.extraPrompt)
+  const retrievalText = [params.brief.product, params.brief.market]
+    .filter(Boolean)
+    .join(" ");
+  const tokens = retrievalText
     .toLowerCase()
     .split(/[^a-z0-9\u4e00-\u9fff]+/u)
-    .filter((token) => token.length >= 3)
+    .filter((token) => token.length >= 2)
     .slice(0, 8);
+
+  if (!tokens.length && !params.knowledgeDocumentIds?.length) {
+    return [];
+  }
 
   const items = await tenantPrisma.knowledgeChunk.findMany({
     where: {
@@ -395,10 +403,62 @@ async function searchPublicKnowledge(params: {
       product: true,
       market: true,
       sensitivity: true,
+      updatedAt: true,
     },
   });
 
-  return items;
+  const scored = items
+    .map((item) => {
+      const haystacks = [
+        item.text,
+        item.sourceCitation ?? "",
+        item.product ?? "",
+        item.market ?? "",
+      ]
+        .join(" ")
+        .toLowerCase();
+
+      const score = tokens.reduce((total, token) => {
+        if (!haystacks.includes(token)) {
+          return total;
+        }
+
+        let tokenScore = 1;
+
+        if ((item.product ?? "").toLowerCase().includes(token)) {
+          tokenScore += 4;
+        }
+
+        if ((item.market ?? "").toLowerCase().includes(token)) {
+          tokenScore += 3;
+        }
+
+        if ((item.sourceCitation ?? "").toLowerCase().includes(token)) {
+          tokenScore += 2;
+        }
+
+        if (item.text.toLowerCase().includes(token)) {
+          tokenScore += 1;
+        }
+
+        return total + tokenScore;
+      }, 0);
+
+      return {
+        item,
+        score,
+      };
+    })
+    .filter(({ score }) => score > 0)
+    .sort((left, right) => {
+      if (right.score !== left.score) {
+        return right.score - left.score;
+      }
+
+      return right.item.updatedAt.getTime() - left.item.updatedAt.getTime();
+    });
+
+  return scored.slice(0, 6).map(({ item }) => item);
 }
 
 async function getLatestBrandKit(tenantContext: TenantContext) {
@@ -645,7 +705,7 @@ function buildFallbackDraft(params: {
     }))
     .slice(0, 4);
   const allowedCitations = new Set(citations.map((item) => item.sourceCitation));
-  const sections = [
+  const baseSections = [
     {
       id: "hero",
       heading: `${params.brief.product} for ${params.brief.market}`,
@@ -681,23 +741,68 @@ function buildFallbackDraft(params: {
       ),
     },
   ];
-  const locales = (params.locales ?? params.brief.locales).map((locale) => ({
-    locale,
-    title: `${params.brief.product} landing`,
-    headline: `${params.brief.product} for ${params.brief.market}`,
-    subheadline: `Built from public knowledge only. Style: ${params.brief.style}.`,
-    ctaLabel: params.brief.cta,
-    sections,
-    faq: [
-      {
-        question: `Is this draft grounded in public knowledge?`,
-        answer: "Yes. Only publicly approved knowledge chunks were attached.",
-        sourceCitations: [],
-      },
-    ],
-    seoTitle: `${params.brief.product} | ${params.brief.market}`,
-    seoDescription: `Public-knowledge draft for ${params.brief.product} in ${params.brief.market}.`,
-  })) satisfies ModelLocaleDraft[];
+  const locales = (params.locales ?? params.brief.locales).map((locale) => {
+    const zhSections =
+      locale === "zh"
+        ? [
+            {
+              ...baseSections[0],
+              heading: `${params.brief.product} 公开资料概览`,
+              body:
+                params.knowledgeItems[0]?.text.slice(0, 280) ??
+                `${params.brief.product} 面向 ${params.brief.market} 采购方的公开资料草稿。`,
+              bullets: params.knowledgeItems
+                .slice(0, 3)
+                .map((item) => item.text.slice(0, 90)),
+            },
+            {
+              ...baseSections[1],
+              heading: "为什么买家会优先考虑这款产品",
+              bullets: [
+                `适配 ${params.brief.market} 市场`,
+                `语气：${params.brief.style}`,
+                `CTA：${params.brief.cta}`,
+              ],
+            },
+          ]
+        : baseSections;
+
+    return {
+      locale,
+      title:
+        locale === "zh"
+          ? `${params.brief.product} 落地页`
+          : `${params.brief.product} landing`,
+      headline:
+        locale === "zh"
+          ? `${params.brief.product} 面向 ${params.brief.market}`
+          : `${params.brief.product} for ${params.brief.market}`,
+      subheadline:
+        locale === "zh"
+          ? `仅基于公开知识生成。风格：${params.brief.style}。`
+          : `Built from public knowledge only. Style: ${params.brief.style}.`,
+      ctaLabel: params.brief.cta,
+      sections: zhSections,
+      faq: [
+        {
+          question:
+            locale === "zh"
+              ? "这个版本是否只基于公开知识？"
+              : "Is this draft grounded in public knowledge?",
+          answer:
+            locale === "zh"
+              ? "是。仅引用已公开审批的知识块。"
+              : "Yes. Only publicly approved knowledge chunks were attached.",
+          sourceCitations: [],
+        },
+      ],
+      seoTitle: `${params.brief.product} | ${params.brief.market}`,
+      seoDescription:
+        locale === "zh"
+          ? `面向 ${params.brief.market} 的 ${params.brief.product} 公开知识草稿。`
+          : `Public-knowledge draft for ${params.brief.product} in ${params.brief.market}.`,
+    };
+  }) satisfies ModelLocaleDraft[];
 
   return {
     projectName: `${params.brief.product} · ${params.brief.market}`,
@@ -708,7 +813,7 @@ function buildFallbackDraft(params: {
         slug: "home",
         title: `${params.brief.product} Landing`,
         isHomepage: true,
-        sections: sections.map((section) => section.id),
+        sections: baseSections.map((section) => section.id),
       },
     ],
     locales: locales.map((locale) =>
@@ -775,6 +880,168 @@ async function callGoogleTranslateText(params: {
   );
 }
 
+async function callLocalQwenTranslateText(params: {
+  text: string;
+  sourceLocale: ApiLocale;
+  targetLocale: ApiLocale;
+  glossaryTerms: string[];
+  fetchImpl?: typeof fetch;
+}) {
+  if (params.sourceLocale === params.targetLocale) {
+    return params.text;
+  }
+
+  const env = getEnv();
+  const fetchImpl = params.fetchImpl ?? fetch;
+  const response = await fetchImpl(
+    `${env.LOCAL_QWEN_BASE_URL.replace(/\/$/, "")}/chat/completions`,
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        model: env.LOCAL_QWEN_MODEL,
+        temperature: 0.1,
+        messages: [
+          {
+            role: "system",
+            content:
+              "Translate the text accurately. Return only the translated text with no extra explanation, labels, or markdown. Preserve product names, brand names, numbers, and business intent exactly as written.",
+          },
+          {
+            role: "user",
+            content: `Source locale: ${params.sourceLocale ?? "auto"}\nTarget locale: ${params.targetLocale}\n\nText to translate:\n${params.text}`,
+          },
+        ],
+      }),
+    },
+  );
+
+  if (!response.ok) {
+    throw new ApiError(500, "INTERNAL", "Local translation fallback failed.");
+  }
+
+  const payload = (await response.json()) as {
+    choices?: Array<{ message?: { content?: unknown } }>;
+  };
+  const content = payload.choices?.[0]?.message?.content;
+  const translatedText = typeof content === "string" ? content : "";
+
+  if (!translatedText.trim()) {
+    throw new ApiError(500, "INTERNAL", "Local translation fallback returned empty content.");
+  }
+
+  return decodeHtmlEntities(translatedText).trim();
+}
+
+async function callLocalQwenRewriteChineseText(params: {
+  text: string;
+  glossaryTerms: string[];
+  fetchImpl?: typeof fetch;
+}) {
+  const env = getEnv();
+  const fetchImpl = params.fetchImpl ?? fetch;
+  const { protectedText, replacements } = protectGlossaryTerms(
+    params.text,
+    params.glossaryTerms,
+  );
+  const response = await fetchImpl(
+    `${env.LOCAL_QWEN_BASE_URL.replace(/\/$/, "")}/chat/completions`,
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        model: env.LOCAL_QWEN_MODEL,
+        temperature: 0.1,
+        messages: [
+          {
+            role: "system",
+            content:
+              "Rewrite the text into natural Simplified Chinese for a public B2B marketing page. Preserve product names, brand names, numbers, URLs, standards, and business intent exactly as written. Return only the rewritten text with no extra explanation, labels, or markdown.",
+          },
+          {
+            role: "user",
+            content: `Target locale: zh\n\nText to rewrite:\n${protectedText}`,
+          },
+        ],
+      }),
+    },
+  );
+
+  if (!response.ok) {
+    throw new ApiError(500, "INTERNAL", "Local Chinese rewrite fallback failed.");
+  }
+
+  const payload = (await response.json()) as {
+    choices?: Array<{ message?: { content?: unknown } }>;
+  };
+  const content = payload.choices?.[0]?.message?.content;
+  const rewrittenText = typeof content === "string" ? content : "";
+
+  if (!rewrittenText.trim()) {
+    throw new ApiError(
+      500,
+      "INTERNAL",
+      "Local Chinese rewrite fallback returned empty content.",
+    );
+  }
+
+  return restoreGlossaryTerms(decodeHtmlEntities(rewrittenText).trim(), replacements);
+}
+
+async function translateTextWithFallback(params: {
+  text: string;
+  sourceLocale: ApiLocale;
+  targetLocale: ApiLocale;
+  glossaryTerms: string[];
+  fetchImpl?: typeof fetch;
+}) {
+  const env = getEnv();
+
+  if (
+    env.GOOGLE_TRANSLATE_KEY.startsWith("local-dev-") &&
+    process.env.NODE_ENV !== "test"
+  ) {
+    return callLocalQwenTranslateText(params);
+  }
+
+  try {
+    return await callGoogleTranslateText(params);
+  } catch {
+    return callLocalQwenTranslateText(params);
+  }
+}
+
+async function rewriteChineseTextWithFallback(params: {
+  text: string;
+  glossaryTerms: string[];
+  fetchImpl?: typeof fetch;
+}) {
+  const env = getEnv();
+
+  if (
+    env.GOOGLE_TRANSLATE_KEY.startsWith("local-dev-") &&
+    process.env.NODE_ENV !== "test"
+  ) {
+    return callLocalQwenRewriteChineseText(params);
+  }
+
+  try {
+    return await callLocalQwenRewriteChineseText(params);
+  } catch {
+    return translateTextWithFallback({
+      text: params.text,
+      sourceLocale: "en",
+      targetLocale: "zh",
+      glossaryTerms: params.glossaryTerms,
+      fetchImpl: params.fetchImpl,
+    });
+  }
+}
+
 async function translateLocaleDraft(params: {
   sourceLocaleDraft: ModelLocaleDraft;
   sourceLocale: ApiLocale;
@@ -783,6 +1050,84 @@ async function translateLocaleDraft(params: {
   fetchImpl?: typeof fetch;
 }) {
   if (params.sourceLocale === params.targetLocale) {
+    if (params.targetLocale === "zh") {
+      const glossaryTerms = buildGlossaryTerms(params.brief);
+
+      return {
+        locale: params.targetLocale,
+        title: await rewriteChineseTextWithFallback({
+          text: params.sourceLocaleDraft.title,
+          glossaryTerms,
+          fetchImpl: params.fetchImpl,
+        }),
+        headline: await rewriteChineseTextWithFallback({
+          text: params.sourceLocaleDraft.headline,
+          glossaryTerms,
+          fetchImpl: params.fetchImpl,
+        }),
+        subheadline: await rewriteChineseTextWithFallback({
+          text: params.sourceLocaleDraft.subheadline,
+          glossaryTerms,
+          fetchImpl: params.fetchImpl,
+        }),
+        ctaLabel: await rewriteChineseTextWithFallback({
+          text: params.brief.cta,
+          glossaryTerms,
+          fetchImpl: params.fetchImpl,
+        }),
+        sections: await Promise.all(
+          params.sourceLocaleDraft.sections.map(async (section) => ({
+            id: section.id,
+            heading: await rewriteChineseTextWithFallback({
+              text: section.heading,
+              glossaryTerms,
+              fetchImpl: params.fetchImpl,
+            }),
+            body: await rewriteChineseTextWithFallback({
+              text: section.body,
+              glossaryTerms,
+              fetchImpl: params.fetchImpl,
+            }),
+            bullets: await Promise.all(
+              section.bullets.map((bullet) =>
+                rewriteChineseTextWithFallback({
+                  text: bullet,
+                  glossaryTerms,
+                  fetchImpl: params.fetchImpl,
+                }),
+              ),
+            ),
+            sourceCitations: section.sourceCitations,
+          })),
+        ),
+        faq: await Promise.all(
+          params.sourceLocaleDraft.faq.map(async (item) => ({
+            question: await rewriteChineseTextWithFallback({
+              text: item.question,
+              glossaryTerms,
+              fetchImpl: params.fetchImpl,
+            }),
+            answer: await rewriteChineseTextWithFallback({
+              text: item.answer,
+              glossaryTerms,
+              fetchImpl: params.fetchImpl,
+            }),
+            sourceCitations: item.sourceCitations,
+          })),
+        ),
+        seoTitle: await rewriteChineseTextWithFallback({
+          text: params.sourceLocaleDraft.seoTitle,
+          glossaryTerms,
+          fetchImpl: params.fetchImpl,
+        }),
+        seoDescription: await rewriteChineseTextWithFallback({
+          text: params.sourceLocaleDraft.seoDescription,
+          glossaryTerms,
+          fetchImpl: params.fetchImpl,
+        }),
+      } satisfies ModelLocaleDraft;
+    }
+
     return {
       ...params.sourceLocaleDraft,
       locale: params.targetLocale,
@@ -792,7 +1137,7 @@ async function translateLocaleDraft(params: {
 
   const glossaryTerms = buildGlossaryTerms(params.brief);
   const translate = (text: string) =>
-    callGoogleTranslateText({
+    translateTextWithFallback({
       text,
       sourceLocale: params.sourceLocale,
       targetLocale: params.targetLocale,
@@ -1153,6 +1498,8 @@ function buildGenerationPrompt(params: {
   brandKitPrompt?: string;
   assetPrompt?: string;
 }) {
+  const sourceLocale = getSourceLocale(params.brief);
+
   return buildSitePrompt({
     brief: params.brief,
     summary: "Create a B2B export landing site draft in JSON only.",
@@ -1163,6 +1510,13 @@ function buildGenerationPrompt(params: {
       "- Keep the copy suitable for public marketing pages.",
       "- Produce 1 to 3 pages, but default to 1 landing page.",
       "- Generate only the source locale content. Other locales will be translated later.",
+      sourceLocale === "zh"
+        ? "- The source locale is zh. Write all user-facing copy in natural Simplified Chinese, and do not leave English sentence scaffolding in titles, headlines, subheadlines, FAQ, or SEO text."
+        : "- The source locale is en. Write all user-facing copy in natural English, and do not leave Chinese sentence scaffolding in the source locale draft.",
+      "- Keep product names, brand names, standards, and model codes as-is.",
+      sourceLocale === "zh"
+        ? "- For the zh draft, localize market phrasing naturally for China and the United States, such as 中国 / 美国."
+        : "- For the en draft, localize market phrasing naturally for China and the United States, such as China / USA.",
       "- Include title, headline, subheadline, CTA, sections, FAQ, seoTitle, seoDescription for the source locale.",
       "- Keep citations only as exact sourceCitation strings from knowledge context.",
       "- Return JSON with keys: projectName, assistantReply, pages, locales, previewChecks, citations.",
@@ -1211,6 +1565,8 @@ function buildChatPrompt(params: {
   brandKitPrompt?: string;
   assetPrompt?: string;
 }) {
+  const sourceLocale = getSourceLocale(params.brief);
+
   return buildSitePrompt({
     brief: params.brief,
     summary: "Revise the existing B2B site draft and return JSON only.",
@@ -1227,6 +1583,10 @@ function buildChatPrompt(params: {
       "- Preserve grounded facts and cite only attached public knowledge context.",
       "- If the request asks for unsupported facts, keep the wording generic instead of inventing specifics.",
       "- Return only the source locale draft. Other locales will be translated after the update.",
+      sourceLocale === "zh"
+        ? "- The source locale is zh. Keep all user-facing prose in natural Simplified Chinese, and do not leave English sentence scaffolding in the draft."
+        : "- The source locale is en. Keep all user-facing prose in natural English, and do not leave Chinese sentence scaffolding in the draft.",
+      "- Keep product names, brand names, standards, and model codes as-is.",
       "- Return the same JSON shape: projectName, assistantReply, pages, locales, previewChecks, citations.",
     ],
   });
@@ -1296,7 +1656,7 @@ export async function createSiteGenerationRequest(params: {
   requestedByUserId?: string;
   brief: SiteBriefInput;
 } & SiteReferenceContextInput) {
-  const brief = siteBriefSchema.parse(params.brief);
+  const brief = normalizeSiteBriefInput(params.brief);
   const prisma = getPrismaClient();
   const slug = await createUniqueSiteSlug(`${brief.product}-${brief.market}`);
   const siteProject = await prisma.siteProject.create({
@@ -1494,14 +1854,28 @@ function buildDraftFromSnapshot(snapshot: SiteSnapshot) {
   } satisfies ModelDraft;
 }
 
-function buildDraftFromDetail(detail: Awaited<ReturnType<typeof getSiteProjectDetail>>) {
-  const brief = siteBriefSchema.parse({
+function getSiteBriefOrThrow(
+  detail: Awaited<ReturnType<typeof getSiteProjectDetail>>,
+) {
+  if (detail.locales.length === 0) {
+    throw new ApiError(
+      422,
+      "VALIDATION",
+      "当前站点还没有 locale 草稿，请先生成至少一个语言版本。",
+    );
+  }
+
+  return siteBriefSchema.parse({
     market: detail.project.market ?? "Unknown Market",
     product: detail.project.product ?? detail.project.name,
     locales: detail.locales.map((item) => item.locale),
     style: detail.project.style ?? "conversion focused",
     cta: detail.project.cta ?? "Request a quote",
   });
+}
+
+function buildDraftFromDetail(detail: Awaited<ReturnType<typeof getSiteProjectDetail>>) {
+  const brief = getSiteBriefOrThrow(detail);
   const snapshot = getSnapshotFromUnknown(
     detail.version
       ? {
@@ -1589,11 +1963,15 @@ function toDetailResponse(params: {
     createdAt: Date;
   }>;
 }) {
+  const fallbackLocales =
+    params.locales.length > 0
+      ? params.locales.map((item) => toApiLocale(item.locale))
+      : [toApiLocale(params.siteProject.defaultLocale)];
+
   const fallbackBrief = siteBriefSchema.parse({
     market: params.siteProject.market ?? "Unknown Market",
     product: params.siteProject.product ?? params.siteProject.name,
-    locales:
-      params.locales.map((item) => toApiLocale(item.locale)) || ["en"],
+    locales: fallbackLocales,
     style: params.siteProject.style ?? "conversion focused",
     cta: params.siteProject.cta ?? "Request a quote",
   });
@@ -2903,13 +3281,7 @@ export async function applySiteChatUpdate(params: {
   }
 
   const detail = await getSiteProjectDetail(params.tenantContext, params.siteId);
-  const brief = siteBriefSchema.parse({
-    market: detail.project.market ?? "Unknown Market",
-    product: detail.project.product ?? detail.project.name,
-    locales: detail.locales.map((item) => item.locale) as ApiLocale[],
-    style: detail.project.style ?? "conversion focused",
-    cta: detail.project.cta ?? "Request a quote",
-  });
+  const brief = getSiteBriefOrThrow(detail);
   const snapshot = getSnapshotFromUnknown(
     {
       brief,

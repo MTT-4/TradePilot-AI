@@ -4,6 +4,11 @@ import { useEffect, useState } from "react";
 import { autofillKindLabel, statusLabel } from "@/app/_lib/labels";
 import { HitlAction } from "@/app/_components/hitl-action";
 import {
+  normalizeSiteLocalesInput,
+  siteLocaleHelpText,
+  siteLocalePlaceholder,
+} from "@/lib/site-locales";
+import {
   fetchCurrentMe,
   LoginRequiredError,
   redirectToLogin,
@@ -220,7 +225,7 @@ export function SitesClient() {
   const [createForm, setCreateForm] = useState({
     market: "",
     product: "",
-    locales: "en,ar,ru",
+    locales: "zh,en",
     style: "conversion focused",
     cta: "Request a quote",
     assetIds: [] as string[],
@@ -454,10 +459,7 @@ export function SitesClient() {
     if (!selectedTenantId) {
       return;
     }
-    const locales = createForm.locales
-      .split(",")
-      .map((value) => value.trim().toLowerCase())
-      .filter(Boolean);
+    const locales = normalizeSiteLocalesInput(createForm.locales.split(","));
     setCreating(true);
     setError(null);
     try {
@@ -587,11 +589,11 @@ export function SitesClient() {
               />
             </div>
             <div className="field" style={{ marginBottom: 0 }}>
-              <label>语种（逗号分隔，可选 en/ar/ru/fr/de/pt）</label>
+              <label>语种（逗号分隔，可选 {siteLocaleHelpText}）</label>
               <input
                 value={createForm.locales}
                 onChange={(e) => setCreateForm({ ...createForm, locales: e.target.value })}
-                placeholder="en,ar,ru"
+                placeholder={siteLocalePlaceholder}
               />
             </div>
             <div className="field" style={{ marginBottom: 0 }}>

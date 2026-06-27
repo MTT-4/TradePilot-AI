@@ -8,6 +8,7 @@ import {
 } from "@/server/jobs/service";
 import { getTenantPrisma } from "@/server/db/tenant-prisma";
 import {
+  markKnowledgeDocumentEmbeddingFailed,
   markKnowledgeDocumentParseFailed,
   runEmbedDocumentJob,
   runParseDocumentJob,
@@ -174,6 +175,14 @@ async function queueProcessor(bullJob: Job<QueuePayload>) {
   } catch (error) {
     if (bullJob.data.type === JobType.PARSE_DOCUMENT) {
       await markKnowledgeDocumentParseFailed({
+        tenantId: bullJob.data.tenantId,
+        requestedByUserId: bullJob.data.requestedByUserId,
+        documentId: String(bullJob.data.input.documentId ?? ""),
+      });
+    }
+
+    if (bullJob.data.type === JobType.EMBED_DOCUMENT) {
+      await markKnowledgeDocumentEmbeddingFailed({
         tenantId: bullJob.data.tenantId,
         requestedByUserId: bullJob.data.requestedByUserId,
         documentId: String(bullJob.data.input.documentId ?? ""),

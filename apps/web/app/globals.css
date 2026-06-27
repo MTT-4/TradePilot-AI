@@ -673,8 +673,13 @@ a {
 
 .content {
   padding: 24px 26px 60px;
-  max-width: 1280px;
+  max-width: none;
   width: 100%;
+}
+/* 防御：页面误嵌套 .content 时不再双倍内边距/二次收窄，保证各页一致铺满 */
+.content .content {
+  padding: 0;
+  max-width: none;
 }
 
 /* grids */
@@ -682,6 +687,24 @@ a {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 18px;
+}
+.kb-upload-panel {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+.kb-upload-panel .drop {
+  padding: 22px 20px;
+}
+.kb-doc-list {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+.kb-doc-list-scroll {
+  max-height: 320px;
+  overflow: auto;
+  padding-right: 4px;
 }
 .dash-top {
   display: grid;
@@ -1013,7 +1036,7 @@ a {
   display: flex;
   align-items: center;
   gap: 11px;
-  padding: 14px 16px;
+  padding: 10px 12px;
   border-bottom: 1px solid var(--line);
 }
 .chat-head .ai {
@@ -1038,10 +1061,10 @@ a {
   color: var(--ink-3);
 }
 .chat-body {
-  padding: 16px;
+  padding: 12px;
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 10px;
   overflow-y: auto;
   flex: 1;
 }
@@ -1113,17 +1136,17 @@ a {
 .chat-compose {
   display: flex;
   flex-direction: column;
-  gap: 10px;
-  padding: 12px;
+  gap: 8px;
+  padding: 9px 11px;
   border-top: 1px solid var(--line);
   background: var(--surface);
 }
 .chat-textarea {
   width: 100%;
-  min-height: 116px;
+  min-height: 92px;
   border: 1px solid var(--line);
   border-radius: 12px;
-  padding: 12px 13px;
+  padding: 10px 11px;
   font-family: inherit;
   font-size: 13px;
   line-height: 1.6;
@@ -1140,7 +1163,7 @@ a {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 10px;
+  gap: 8px;
 }
 
 /* HitlAction component banner */
@@ -1176,13 +1199,16 @@ a {
 /* builder / preview split */
 .split {
   display: grid;
-  grid-template-columns: 360px 1fr;
-  gap: 18px;
+  grid-template-columns: minmax(420px, 500px) minmax(0, 1fr);
+  gap: 16px;
   align-items: start;
 }
+.split > * {
+  min-width: 0;
+}
 .split-chat {
-  height: calc(100vh - 150px);
-  min-height: 520px;
+  height: calc(100dvh - 198px);
+  min-height: 460px;
   position: sticky;
   top: 84px;
 }
@@ -1232,7 +1258,7 @@ a {
   color: #fff;
 }
 .pv-body {
-  padding: 22px;
+  padding: 16px;
   background: linear-gradient(180deg, #fff, var(--surface-2));
   min-height: 320px;
 }
@@ -1281,7 +1307,7 @@ a {
 .pv-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 14px;
+  gap: 10px;
 }
 .pv-card,
 .pv-panel {
@@ -1291,7 +1317,7 @@ a {
   box-shadow: var(--shadow);
 }
 .pv-card {
-  padding: 16px;
+  padding: 12px;
 }
 .pv-card h4,
 .pv-panel h4 {
@@ -1320,19 +1346,34 @@ a {
 .pv-meta-grid {
   display: grid;
   grid-template-columns: minmax(0, 1.3fr) minmax(0, 0.7fr);
-  gap: 14px;
+  gap: 10px;
 }
 .pv-panel {
-  padding: 16px;
+  padding: 12px;
 }
 .pv-stack {
   display: grid;
-  gap: 10px;
+  gap: 8px;
+}
+.split-chat .pv-grid {
+  grid-template-columns: 1fr;
+}
+.split-chat .pv-note,
+.split-chat .pv-panel,
+.split-chat .row-card {
+  min-width: 0;
+}
+.split-chat .row-card .nm {
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+.split-chat .chat-compose-meta {
+  flex-wrap: wrap;
 }
 .pv-note {
   border-radius: 12px;
   background: var(--surface-2);
-  padding: 12px;
+  padding: 9px 10px;
 }
 .pv-note b {
   font-size: 12.5px;
@@ -1343,7 +1384,7 @@ a {
   display: flex;
   align-items: center;
   gap: 13px;
-  padding: 13px 0;
+  padding: 11px 0;
   border-bottom: 1px solid var(--line-2);
 }
 .row-card:last-child {
@@ -1355,18 +1396,19 @@ a {
 }
 .row-card .nm {
   font-weight: 600;
-  font-size: 13.5px;
+  font-size: 13px;
+  line-height: 1.45;
 }
 .row-card .nm span {
   font-weight: 400;
   color: var(--ink-3);
-  font-size: 11.5px;
+  font-size: 11px;
   margin-left: 8px;
 }
 .afi {
-  width: 34px;
-  height: 34px;
-  border-radius: 9px;
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
   background: var(--teal-tint);
   display: grid;
   place-items: center;
@@ -1847,6 +1889,9 @@ a {
     height: auto;
     position: static;
   }
+  .split-chat .pv-grid {
+    grid-template-columns: 1fr;
+  }
   .pv-grid,
   .pv-meta-grid {
     grid-template-columns: 1fr;
@@ -1869,5 +1914,8 @@ a {
   .pv-foot {
     flex-direction: column;
     align-items: stretch;
+  }
+  .split {
+    gap: 14px;
   }
 }

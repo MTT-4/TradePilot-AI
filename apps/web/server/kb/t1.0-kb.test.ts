@@ -253,6 +253,71 @@ describe("T1.0 knowledge documents", () => {
     15000,
   );
 
+  it("marks the document failed when embedding fails after parsing", async () => {
+    await closeJobWorker();
+    const env = getEnv();
+    const baseUrl = env.LOCAL_BGE_BASE_URL.replace(/\/$/, "");
+
+    globalThis.fetch = (async (input, init) => {
+      const url =
+        typeof input === "string"
+          ? input
+          : input instanceof URL
+            ? input.toString()
+            : input.url;
+
+      if (url === `${baseUrl}/embeddings`) {
+        return new Response(
+          JSON.stringify({
+            error: "local embedding unavailable",
+          }),
+          {
+            status: 503,
+            headers: {
+              "content-type": "application/json",
+            },
+          },
+        );
+      }
+
+      return originalFetch(input as RequestInfo | URL, init);
+    }) as typeof fetch;
+
+    try {
+      const file = new File(
+        ["Embedding failure should not leave this document stuck."],
+        "embedding-failure.txt",
+        {
+          type: "text/plain",
+        },
+      );
+      const result = await createKnowledgeDocumentFromUpload({
+        tenantContext,
+        uploadedByUserId: tenantContext.userId,
+        file,
+        sensitivity: "public",
+        title: "Embedding failure fixture",
+      });
+
+      startJobWorker();
+
+      await waitForDocumentStatus({
+        tenantContext,
+        documentId: result.documentId,
+        expected: KnowledgeDocumentStatus.FAILED,
+        allowIntermediates: [
+          KnowledgeDocumentStatus.UPLOADED,
+          KnowledgeDocumentStatus.PARSING,
+          KnowledgeDocumentStatus.CHUNKING,
+          KnowledgeDocumentStatus.EMBEDDING,
+        ],
+      });
+    } finally {
+      await closeJobWorker();
+      installMockEmbeddingFetch();
+    }
+  }, 15000);
+
   it("parses a URL document and allows retry after a failure", async () => {
     let failMode = true;
     const server = createServer((request, response) => {

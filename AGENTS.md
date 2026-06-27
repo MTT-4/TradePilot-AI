@@ -10,6 +10,8 @@ TradePilot AI · 本地优先的 AI 外贸营销获客平台（Next.js App Route
    不要硬编码一次性颜色。
 2. **页面别套整页背景**：侧边栏 + 顶栏 + `.content` 容器由 `apps/web/app/_components/app-shell.tsx` 统一提供；
    页面组件直接渲染内容即可。`/login` 与对外站点 `/site/*` 不套框架。
+   **页面根不得再自包 `.content`**（app-shell 已唯一提供）；自包会导致双层容器、双倍内边距、宽度不一致。
+   页面用 `<>` 片段或无样式 `<div>` 作根即可。`.content` 已设 `max-width:none` 铺满主区域。
 3. **隐私红线**：客户隐私数据（姓名、电话、询盘正文）只走本地 Qwen，绝不发往 OpenAI / Google。
 4. **多租户隔离**：数据访问走 `apps/web/server/db/tenant-prisma.ts`；新增模型注意 `tenantId` 注入与校验。
 5. **保留数据/权限逻辑**：改 UI 时不要动各页原有的数据获取（`fetchCurrentMe` + `X-Tenant-Id`）、权限判断与 HITL 审批流。

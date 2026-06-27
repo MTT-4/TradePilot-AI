@@ -1,19 +1,10 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
-import {
-  getPublicSiteLocalePageData,
-  type SiteApiLocale,
-} from "@/server/sites/service";
+import { getPublicSiteLocalePageData, type SiteApiLocale } from "@/server/sites/service";
+import { siteLocaleValues } from "@/lib/site-locales";
 import { InquiryForm } from "./inquiry-form";
 
-const supportedLocales = new Set<SiteApiLocale>([
-  "en",
-  "ar",
-  "ru",
-  "fr",
-  "de",
-  "pt",
-]);
+const supportedLocales = new Set<SiteApiLocale>(siteLocaleValues);
 
 async function loadPageData(params: {
   slug: string;

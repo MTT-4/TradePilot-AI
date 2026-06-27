@@ -159,11 +159,11 @@ export function OperatorGuideClient() {
   }
 
   if (loading) {
-    return <div className="content"><div className="card" style={{ padding: 24 }}>加载中…</div></div>;
+    return <div className="page-body"><div className="card" style={{ padding: 24 }}>加载中…</div></div>;
   }
 
   return (
-    <div className="content">
+    <div className="page-body">
       <div className="head-row">
         <div>
           <div className="eyebrow">操作指导</div>

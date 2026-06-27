@@ -914,6 +914,28 @@ export async function markKnowledgeDocumentParseFailed(params: {
   });
 }
 
+export async function markKnowledgeDocumentEmbeddingFailed(params: {
+  tenantId: string;
+  requestedByUserId?: string;
+  documentId: string;
+}) {
+  const tenantContext = {
+    tenantId: params.tenantId,
+    userId: params.requestedByUserId ?? "system",
+    role: MembershipRole.OWNER,
+  };
+  const tenantPrisma = getTenantPrisma(tenantContext);
+
+  await tenantPrisma.knowledgeDocument.updateMany({
+    where: {
+      id: params.documentId,
+    },
+    data: {
+      status: KnowledgeDocumentStatus.FAILED,
+    },
+  });
+}
+
 export async function getParsedKnowledgeDocumentText(params: {
   tenantId: string;
   documentId: string;

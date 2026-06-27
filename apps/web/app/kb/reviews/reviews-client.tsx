@@ -427,7 +427,7 @@ export function ReviewsClient() {
       ) : null}
 
       <div className="grid-2" style={{ gridTemplateColumns: "1.4fr 1fr", marginBottom: 18 }}>
-        <div className="card" style={{ padding: 18 }}>
+        <div className="card kb-upload-panel" style={{ padding: 18 }}>
           <label
             className="drop"
             style={{ cursor: uploadBusy ? "wait" : "pointer", display: "block" }}
@@ -454,38 +454,42 @@ export function ReviewsClient() {
           </label>
 
           <h4 style={{ fontSize: 14, margin: "16px 0 8px" }}>已入库文档</h4>
-          {documents.map((document) => (
-            <div className="row-card" key={document.id}>
-              <div className="afi">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
-                  <path d="M14 3v5h5M7 3h7l5 5v13H7z" />
-                </svg>
-              </div>
-              <div className="grow">
-                <div className="nm">
-                  {document.title}
-                  <span>
-                    {document.locale.toUpperCase()} ·{" "}
-                    {sensitivityLabel(document.sensitivity)}
-                  </span>
+          <div className="kb-doc-list">
+            <div className="kb-doc-list-scroll">
+              {documents.map((document) => (
+                <div className="row-card" key={document.id}>
+                  <div className="afi">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
+                      <path d="M14 3v5h5M7 3h7l5 5v13H7z" />
+                    </svg>
+                  </div>
+                  <div className="grow">
+                    <div className="nm">
+                      {document.title}
+                      <span>
+                        {document.locale.toUpperCase()} ·{" "}
+                        {sensitivityLabel(document.sensitivity)}
+                      </span>
+                    </div>
+                  </div>
+                  <span className={`st ${document.status}`}>{statusLabel(document.status)}</span>
+                  {document.status === "failed" ? (
+                    <button
+                      type="button"
+                      className="btn ghost sm"
+                      disabled={retryBusyId === document.id}
+                      onClick={() => void retryDocument(document.id)}
+                    >
+                      {retryBusyId === document.id ? "重试中…" : "重试"}
+                    </button>
+                  ) : null}
                 </div>
-              </div>
-              <span className={`st ${document.status}`}>{statusLabel(document.status)}</span>
-              {document.status === "failed" ? (
-                <button
-                  type="button"
-                  className="btn ghost sm"
-                  disabled={retryBusyId === document.id}
-                  onClick={() => void retryDocument(document.id)}
-                >
-                  {retryBusyId === document.id ? "重试中…" : "重试"}
-                </button>
+              ))}
+              {documents.length === 0 ? (
+                <div className="sub" style={{ padding: "10px 0" }}>还没有文档，先上传资料。</div>
               ) : null}
             </div>
-          ))}
-          {documents.length === 0 ? (
-            <div className="sub" style={{ padding: "10px 0" }}>还没有文档，先上传资料。</div>
-          ) : null}
+          </div>
         </div>
 
         <div className="card" style={{ padding: 18 }}>

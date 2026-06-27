@@ -1,6 +1,6 @@
-# TradePilot AI 本地服务器项目
+# TradePilot AI
 
-TradePilot AI 是一个本地优先、可迁移的 AI 外贸营销获客平台。当前仓库已完成 `T0.1` 脚手架：Next.js App Router、TypeScript、Tailwind、环境变量校验、`/api/health` 探活、Docker Compose 本地依赖和基础检查脚本。
+TradePilot AI 是一个本地优先、可迁移的 AI 外贸营销获客平台。当前仓库基于 Next.js App Router、TypeScript、Tailwind、Prisma/PostgreSQL 构建，已覆盖站点生成、知识库、CRM、首响审批、内容包、通知治理与设置管理等核心能力。
 
 ## 目录结构
 
